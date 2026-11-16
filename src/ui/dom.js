@@ -63,30 +63,6 @@ export function toast(msg, ms = 2600) {
   setTimeout(() => { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 320); }, ms);
 }
 
-// ---------------------------------------------------------------- 3D 틸트 (포인터를 따라 기울고 빛 반사가 움직인다)
-export function tilt(container, selector, max = 7) {
-  const fine = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-  const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (!fine || calm) return () => {};
-  let cur = null;
-  const move = (e) => {
-    const el = e.target.closest(selector);
-    if (cur && cur !== el) reset(cur);
-    cur = el;
-    if (!el) return;
-    const r = el.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
-    el.style.setProperty('--ry', `${((x - 0.5) * 2 * max).toFixed(2)}deg`);
-    el.style.setProperty('--rx', `${((0.5 - y) * 2 * max).toFixed(2)}deg`);
-    el.style.setProperty('--gx', `${(x * 100).toFixed(1)}%`);
-    el.style.setProperty('--gy', `${(y * 100).toFixed(1)}%`);
-  };
-  const reset = (el) => { el.style.setProperty('--rx', '0deg'); el.style.setProperty('--ry', '0deg'); };
-  const leave = () => { if (cur) reset(cur); cur = null; };
-  container.addEventListener('pointermove', move);
-  container.addEventListener('pointerleave', leave);
-  return () => { container.removeEventListener('pointermove', move); container.removeEventListener('pointerleave', leave); };
-}
-
 // ---------------------------------------------------------------- 저장소 (브라우저에만 남는 개인 설정·진행 기록)
 const KEY = 'miniatyr.v1';
 const DEF = { N: 12, fit: false, theme: 'system', sheetStyle: 'paper', mmpx: 96 / 25.4, items: {} };

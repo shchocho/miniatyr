@@ -14,7 +14,7 @@ const ctx = {
 // ───── 테마
 function applyTheme() {
   const t = store.get('theme');
-  if (t === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
+  document.documentElement.setAttribute('data-theme', ctx.isDark() ? 'dark' : 'light');   // 늘 light 또는 dark: CSS 의 어두운 화면 선택자는 [data-theme="dark"] 하나다
   const btn = document.getElementById('theme-btn');
   if (btn) { btn.innerHTML = icon(ctx.isDark() ? 'sun' : 'moon'); btn.setAttribute('aria-label', ctx.isDark() ? '밝은 화면으로' : '어두운 화면으로'); }
   if (ctx.onTheme) ctx.onTheme();

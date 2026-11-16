@@ -117,7 +117,7 @@ export class Showroom {
     g.fillStyle = '#e8f5ee'; g.textAlign = 'center'; g.textBaseline = 'middle';
     for (const r of this.layout.rooms) {
       const x = r.x + r.w / 2, z = r.z + r.d + 620;
-      g.globalAlpha = 0.95; g.font = `800 ${Math.round(400 * s)}px Archivo, "IBM Plex Sans KR", sans-serif`;
+      g.globalAlpha = 0.95; g.font = `700 ${Math.round(400 * s)}px "IBM Plex Sans KR", sans-serif`;
       g.fillText(r.name, X(x), Z(z), (r.w - 400) * s);
       g.globalAlpha = 0.7; g.font = `500 ${Math.round(190 * s)}px "IBM Plex Mono", ui-monospace, monospace`;
       g.fillText(`ROOM ${String(this.layout.rooms.indexOf(r) + 1).padStart(2, '0')} · ${r.places.length} PCS · 1:12`, X(x), Z(z + 430));
@@ -140,10 +140,10 @@ export class Showroom {
 
   setTheme(dark) {
     this.dark = !!dark;
-    const bg = new THREE.Color(this.dark ? '#141b18' : '#dde1dd');
+    const bg = new THREE.Color(this.dark ? '#151514' : '#e2e0d9');
     this.scene.background = bg;
     this.scene.fog = new THREE.Fog(bg, 1, 2);
-    this.deskMat.color.set(this.dark ? '#1b2420' : '#d2d6d2');
+    this.deskMat.color.set(this.dark ? '#1f1f1d' : '#d6d4cc');
     this.scene.environmentIntensity = ENV_LEVEL * (this.dark ? 0.66 : 0.8);
     this.invalidate();
   }

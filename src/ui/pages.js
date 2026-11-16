@@ -48,7 +48,7 @@ export function guidePage(root) {
   const page = h('div', { class: 'page wrap doc' },
     h('nav', { class: 'doc__toc', 'aria-label': '목차' }, GUIDE.map(([id, t]) => h('a', { href: `#guide`, onclick: (e) => { e.preventDefault(); document.getElementById(`g-${id}`).scrollIntoView({ behavior: 'smooth' }); } }, t))),
     h('div', { class: 'doc__body' },
-      h('header', {}, h('span', { class: 'tape' }, '만드는 법'), h('h1', { style: { marginTop: '14px' } }, '도면 한 장에서 손바닥 위 가구까지'), h('p', {}, '미니어처 가구는 네 단계로 만듭니다. 각 단계는 워크벤치의 탭 하나와 짝을 이룹니다.')),
+      h('header', {}, h('h1', {}, '도면 한 장에서 손바닥 위 가구까지'), h('p', {}, '미니어처 가구는 네 단계로 만듭니다. 각 단계는 워크벤치의 탭 하나와 짝을 이룹니다.')),
       h('ol', { class: 'flow' }, [['01', '도면', '축척을 고르면 삼면도·분해도·부품도가 그려집니다.'], ['02', '재단', '1:1 템플릿을 인쇄해 붙이고 자릅니다.'], ['03', '조립', '3D 순서를 따라 붙입니다.'], ['04', '마감', '칠하고, 씌우고, 손잡이를 답니다.']].map(([n, t, d]) => h('li', {}, h('i', {}, n), h('b', {}, t), h('span', {}, d)))),
       GUIDE.map(([id, t, body]) => h('section', { id: `g-${id}` }, h('h2', {}, t), body())),
       h('div', { class: 'hero__cta' }, h('a', { class: 'btn btn--lg btn--mat', href: '#item-billy' }, '첫 작품으로 BILLY 만들기'), h('a', { class: 'btn btn--lg', href: '#home' }, '컬렉션 보기'))));
@@ -79,7 +79,7 @@ export function labPage(root) {
     tbl.replaceChildren(...SCALES.map((s) => h('tr', { class: s.n === S.N ? 'is-on' : null }, h('td', { class: 'mono' }, s.label), h('td', { class: 'num' }, fmt(w / s.n, 1)), h('td', { class: 'num' }, fmt(d / s.n, 1)), h('td', { class: 'num' }, fmt(hh / s.n, 1)))));
   }
   const page = h('div', { class: 'page wrap' },
-    h('div', { class: 'sec__head', style: { paddingTop: '20px' } }, h('div', {}, h('span', { class: 'tape' }, '스케일 랩'), h('h2', { style: { marginTop: '12px' } }, '완성하면 실제로 얼마나 클까'), h('p', {}, '초록 판의 눈금은 1cm입니다. 가구 정면이 화면에 실제 크기로 그려집니다.'))),
+    h('div', { class: 'sec__head', style: { paddingTop: '20px' } }, h('div', {}, h('h2', {}, '완성하면 실제로 얼마나 클까'), h('p', {}, '초록 판의 눈금은 1cm입니다. 가구 정면이 화면에 실제 크기로 그려집니다.'))),
     h('div', { class: 'lab' }, board,
       h('aside', { class: 'lab__side' },
         h('div', { class: 'panel ctl' },
@@ -125,7 +125,7 @@ export function workshopPage(root) {
     e.target.value = '';
   } });
   const page = h('div', { class: 'page wrap' },
-    h('div', { class: 'sec__head', style: { paddingTop: '20px' } }, h('div', {}, h('span', { class: 'tape' }, '내 공방'), h('h2', { style: { marginTop: '12px' } }, '만들고 있는 것들'), h('p', {}, '조립 단계를 체크한 가구가 여기에 모입니다.')),
+    h('div', { class: 'sec__head', style: { paddingTop: '20px' } }, h('div', {}, h('h2', {}, '만들고 있는 것들'), h('p', {}, '조립 단계를 체크한 가구가 여기에 모입니다.')),
       h('div', { style: { display: 'flex', gap: '8px' } },
         h('button', { type: 'button', class: 'btn btn--sm', html: `${icon('down')} 백업 저장`, onclick: () => saveFile('miniatyr-backup.json', JSON.stringify(store.all(), null, 2), 'application/json') }),
         h('label', { class: 'btn btn--sm', for: 'ws-file', tabindex: '0', onkeydown: (e) => { if (e.key === 'Enter') file.click(); } }, '백업 불러오기'), file)),

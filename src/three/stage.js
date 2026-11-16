@@ -140,7 +140,7 @@ export class Stage {
     this.meshes = new Map();
     this.R = 1000;
     this.center = new THREE.Vector3();
-    this.theme = { bg: '#e9ecea', dark: false };
+    this.theme = { bg: '#efeee9', dark: false };
     this.lineTheme = 'blueprint';
     this.style = 'photo';
     this.split = 0;
@@ -280,7 +280,7 @@ export class Stage {
   // ------------------------------------------------------------ public state
   setTheme(theme) {
     this.theme = { ...this.theme, ...theme };
-    if (this.coveMat) this.coveMat.color.set(this.theme.cove || (this.theme.dark ? '#2a2f2d' : '#d6d9d6'));
+    if (this.coveMat) this.coveMat.color.set(this.theme.cove || (this.theme.dark ? '#2b2b28' : '#dad8d0'));
     this.invalidate();
   }
 
@@ -840,7 +840,7 @@ export class Stage {
     }
     this.dimLines.visible = this.dimsOn;
     if (this.cutout) { this.scene.background = null; r.setClearColor(0x000000, 0); }
-    else { r.setClearColor(new THREE.Color(this.theme.dark ? '#1b1f1d' : '#dfe2df'), 1); }
+    else { r.setClearColor(new THREE.Color(this.theme.dark ? '#1c1c1a' : '#e4e2db'), 1); }
     r.setRenderTarget(target);
     r.clear();
     r.render(this.scene, this.camera);

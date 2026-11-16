@@ -1,6 +1,6 @@
 // home.js — 홈: 스크롤에 맞춰 같은 미니어처가 도면 → 재단 → 조립 → 완성으로 변하는 3D 연출 + 컬렉션.
 
-import { h, icon, tilt, store, thumb, no3, pips, tick, esc } from './dom.js';
+import { h, icon, store, thumb, no3, pips, tick, esc } from './dom.js';
 import { CATALOG, CATS, getItem, searchText } from '../data/catalog.js';
 import { buildModel } from '../core/kit.js';
 import { fmt } from '../core/scale.js';
@@ -37,7 +37,7 @@ export function homePage(root, ctx) {
   };
   const host = h('div', { class: 'shot__host' });
   const poster = h('img', { class: 'shot__poster', src: thumb(feat), alt: '' });
-  const frame = h('div', { class: 'shot__frame hudframe' }, host, poster,
+  const frame = h('div', { class: 'shot__frame' }, host, poster,
     h('div', { class: 'hud hud--tl' }, hud.code), h('div', { class: 'hud hud--tr' }, h('span', {}, '축척 '), hud.scale),
     h('div', { class: 'hud hud--bl' }, hud.az), h('div', { class: 'hud hud--br' }, hud.size),
     h('div', { class: 'hud hud--c' }, hud.chap));
@@ -45,10 +45,9 @@ export function homePage(root, ctx) {
     const it = getItem(id);
     return h('button', { type: 'button', 'aria-pressed': String(id === feat), onclick: () => setFeat(id) }, it.name.split(' ')[0]);
   }));
-  const stageCol = h('div', { class: 'story__stage' }, frame, h('div', { class: 'story__veil' }), h('div', { class: 'shot__cap' }, chips, h('a', { class: 'btn btn--sm btn--tape', href: `#item-${feat}`, id: 'hero-open' }, '이 가구 만들기')));
+  const stageCol = h('div', { class: 'story__stage' }, frame, h('div', { class: 'story__veil' }), h('div', { class: 'shot__cap' }, chips, h('a', { class: 'btn btn--sm', href: `#item-${feat}`, id: 'hero-open' }, '이 가구 만들기')));
 
   const hero = h('article', { class: 'chapter chapter--hero', dataset: { ch: '0' } },
-    h('span', { class: 'tape' }, `아이코닉 가구 100 · 1:6 – 1:48`),
     h('h1', { html: '백 개의 가구를<br><em>손바닥 위에.</em>' }),
     h('p', { class: 'hero__lead' }, '도면을 뽑고, 재료를 자르고, 순서대로 붙이면 미니어처가 됩니다. 책장부터 소파까지 100가지 가구의 삼면도·재단표·조립 순서·3D 모델을 한곳에 담았습니다.'),
     h('div', { class: 'hero__cta' },
@@ -62,7 +61,7 @@ export function homePage(root, ctx) {
     h('p', { class: 'scrollcue' }, h('span', { html: icon('down') }), '스크롤하면 만드는 과정이 이어집니다'));
   const chapEls = [hero, ...CHAPTERS.map((c, i) => h('article', { class: 'chapter', dataset: { ch: String(i + 1) } },
     h('span', { class: 'eyebrow' }, `${c.n} — ${c.k}`), h('h2', {}, c.t), h('p', {}, c.d),
-    i === 3 ? h('div', { class: 'hero__cta', style: { marginTop: '0' } }, h('a', { class: 'btn btn--tape', href: '#collection', onclick: (e) => { e.preventDefault(); setView('room'); document.getElementById('collection').scrollIntoView({ behavior: 'smooth' }); } }, '3D 쇼룸 둘러보기'), h('a', { class: 'btn', href: '#collection', onclick: (e) => { e.preventDefault(); document.getElementById('collection').scrollIntoView({ behavior: 'smooth' }); } }, '목록으로 고르기')) : null))];
+    i === 3 ? h('div', { class: 'hero__cta', style: { marginTop: '0' } }, h('a', { class: 'btn btn--mat', href: '#collection', onclick: (e) => { e.preventDefault(); setView('room'); document.getElementById('collection').scrollIntoView({ behavior: 'smooth' }); } }, '3D 쇼룸 둘러보기'), h('a', { class: 'btn', href: '#collection', onclick: (e) => { e.preventDefault(); document.getElementById('collection').scrollIntoView({ behavior: 'smooth' }); } }, '목록으로 고르기')) : null))];
   const story = h('section', { class: 'story', 'aria-label': '만드는 과정' }, stageCol, h('div', { class: 'story__text wrap' }, chapEls));
 
   // ───── 컬렉션
@@ -82,8 +81,6 @@ export function homePage(root, ctx) {
     grid);
   page.append(story, coll);
   root.append(page);
-  const offTilt = tilt(grid, '.card', 8);
-  const offTilt2 = () => {};
 
   function press(group, btn) { for (const b of group.children) b.setAttribute('aria-pressed', String(b === btn)); }
 
@@ -93,7 +90,7 @@ export function homePage(root, ctx) {
     return h('a', { class: 'card', href: `#item-${it.id}`, 'aria-label': `${it.name} ${it.type}, 난이도 ${it.diff}/5` },
       h('div', { class: 'card__face' },
         h('div', { class: 'card__pic' }, h('img', { src: thumb(it.id), alt: '', loading: 'lazy', decoding: 'async', width: 720, height: 720 }),
-          h('span', { class: 'card__no' }, `No.${no3(it.no)}`), h('div', { class: 'card__glare' })),
+          h('span', { class: 'card__no' }, `No.${no3(it.no)}`)),
         h('div', { class: 'card__body' },
           h('h3', { class: 'card__name' }, it.name), h('span', { class: 'card__diff', html: pips(it.diff) }),
           h('p', { class: 'card__type' }, `${it.ko} ${it.type}`),
@@ -107,7 +104,7 @@ export function homePage(root, ctx) {
     const found = h('div', { class: 'hud hud--c', hidden: true });
     const touch = window.matchMedia('(pointer: coarse)').matches;
     const hint = h('div', { class: 'hud hud--bl' }, touch ? '끌어서 이동 · 두 손가락으로 확대·회전 · 가구를 한 번 눌러 고르고, 다시 누르면 열립니다' : '끌어서 이동 · 휠로 확대 · Shift+끌기로 회전 · 가구를 누르면 열립니다 · 방 이름표를 누르면 그 방으로');
-    const cardName = h('b', {}), cardType = h('span', {}), cardDims = h('span', { class: 'mono' }), cardGo = h('a', { class: 'btn btn--sm btn--tape', href: '#home' }, '워크벤치 열기');
+    const cardName = h('b', {}), cardType = h('span', {}), cardDims = h('span', { class: 'mono' }), cardGo = h('a', { class: 'btn btn--sm btn--mat', href: '#home' }, '워크벤치 열기');
     const cardEl = h('div', { class: 'room__card', hidden: true }, h('div', {}, cardName, cardType, cardDims), cardGo);
     const tools = h('div', { class: 'viewer__tools viewer__tools--tr' },
       h('button', { type: 'button', class: 'btn btn--sm', onclick: () => room && room.reset() }, '처음 위치'),
@@ -244,7 +241,7 @@ export function homePage(root, ctx) {
   return () => {
     disposed = true; ctx.onTheme = null;
     window.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onScroll);
-    cancelAnimationFrame(raf); offTilt(); offTilt2();
+    cancelAnimationFrame(raf);
     closeRoom();
     if (stage) stage.dispose();
   };
