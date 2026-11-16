@@ -1,0 +1,153 @@
+/* Miniatyr — tokens.css. Universal Design DNA tokens (light default, [data-theme="dark"] for dark).
+   Project DNA changes, recorded in DESIGN.md: the accent family (pine green) and the font file paths. */
+:root, [data-theme="light"] {
+  --canvas: #f5f4f0;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: #ebeae5;
+  --surface-inverse: #121211;
+  --ink: #121211;
+  --ink-secondary: #47463f;
+  --ink-muted: #696862;
+  --ink-inverse: #f5f4f0;
+  --border: #8f8d86;
+  --divider: #e2e0da;
+  --primary: #121211;
+  --primary-hover: #34332f;
+  --on-primary: #ffffff;
+  --secondary: #e9e7e1;
+  --secondary-hover: #dddbd4;
+  --accent: #2f5d46;
+  --accent-hover: #244a37;
+  --on-accent: #ffffff;
+  --accent-subtle: #e3ece6;
+  --focus: var(--accent);
+  --success: #08676f;
+  --success-subtle: #e0f0f0;
+  --warning: #875200;
+  --warning-subtle: #faefd7;
+  --danger: #b3261e;
+  --danger-hover: #93201a;
+  --on-danger: #ffffff;
+  --danger-subtle: #fbe7e4;
+  --info: var(--accent);
+  --info-subtle: var(--accent-subtle);
+  --scrim: rgba(18, 18, 17, 0.48);
+  --data-1: var(--accent);
+  --data-2: #8f8d86;
+  --data-3: #c9c7c0;
+  --shadow-1: 0 1px 2px rgba(18, 18, 17, 0.06), 0 0 0 1px rgba(18, 18, 17, 0.04);
+  --shadow-2: 0 12px 32px -12px rgba(18, 18, 17, 0.2), 0 2px 6px rgba(18, 18, 17, 0.06);
+  --shadow-3: 0 32px 80px -24px rgba(18, 18, 17, 0.32), 0 4px 12px rgba(18, 18, 17, 0.08);
+}
+[data-theme="dark"] {
+  --canvas: #0e0e0d;
+  --surface: #161615;
+  --surface-raised: #201f1e;
+  --surface-sunken: #080808;
+  --surface-inverse: #f5f4f0;
+  --ink: #edece8;
+  --ink-secondary: #bebcb5;
+  --ink-muted: #96948d;
+  --ink-inverse: #121211;
+  --border: #6f6d67;
+  --divider: #2b2a28;
+  --primary: #edece8;
+  --primary-hover: #d6d4ce;
+  --on-primary: #121211;
+  --secondary: #272624;
+  --secondary-hover: #302f2c;
+  --accent: #8fc7a4;
+  --accent-hover: #a9d6ba;
+  --on-accent: #0e0e0d;
+  --accent-subtle: #17261d;
+  --focus: var(--accent);
+  --success: #55c4c9;
+  --success-subtle: #0f2627;
+  --warning: #f0b450;
+  --warning-subtle: #2c2110;
+  --danger: #ff8f80;
+  --danger-hover: #ffaa9e;
+  --on-danger: #121211;
+  --danger-subtle: #331714;
+  --info: var(--accent);
+  --info-subtle: var(--accent-subtle);
+  --scrim: rgba(0, 0, 0, 0.64);
+  --data-1: var(--accent);
+  --data-2: #7d7b75;
+  --data-3: #4a4945;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-2: 0 12px 32px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-3: 0 32px 80px -24px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --section-sm: 80px;
+  --section-md: 128px;
+  --section-lg: 192px;
+  --radius-none: 0;
+  --radius-xs: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 20px;
+  --radius-full: 999px;
+  --duration-instant: 80ms;
+  --duration-fast: 140ms;
+  --duration-base: 220ms;
+  --duration-slow: 360ms;
+  --duration-slower: 560ms;
+  --duration-cinematic: 900ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-cinematic: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-linear: linear;
+  --reading-max: 680px;
+  --content-max: 1200px;
+  --wide-max: 1440px;
+  --grid-gutter: 24px;
+  --bp-sm: 640px;
+  --bp-md: 768px;
+  --bp-lg: 1024px;
+  --bp-xl: 1280px;
+  --bp-2xl: 1536px;
+  --z-sticky: 100;
+  --z-dropdown: 300;
+  --z-overlay: 400;
+  --z-modal: 500;
+  --z-toast: 600;
+  --z-tooltip: 700;
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "Pretendard Variable", ui-monospace, "SF Mono", Consolas, monospace;
+}
+@font-face { font-family: "Pretendard Variable"; src: url("../fonts/Pretendard-subset.woff2") format("woff2"); font-weight: 45 920; font-style: normal; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("../fonts/IBMPlexMono-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("../fonts/IBMPlexMono-Medium.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+.display-2xl { font-family: var(--font-sans); font-size: 96px; line-height: 1.0; font-weight: 700; letter-spacing: -0.035em; }
+.display-xl { font-family: var(--font-sans); font-size: 72px; line-height: 1.04; font-weight: 700; letter-spacing: -0.03em; }
+.display-lg { font-family: var(--font-sans); font-size: 56px; line-height: 1.08; font-weight: 700; letter-spacing: -0.025em; }
+.heading-1 { font-family: var(--font-sans); font-size: 44px; line-height: 1.14; font-weight: 700; letter-spacing: -0.022em; }
+.heading-2 { font-family: var(--font-sans); font-size: 34px; line-height: 1.2; font-weight: 700; letter-spacing: -0.018em; }
+.heading-3 { font-family: var(--font-sans); font-size: 26px; line-height: 1.28; font-weight: 600; letter-spacing: -0.012em; }
+.heading-4 { font-family: var(--font-sans); font-size: 21px; line-height: 1.36; font-weight: 600; letter-spacing: -0.008em; }
+.heading-5 { font-family: var(--font-sans); font-size: 18px; line-height: 1.44; font-weight: 600; letter-spacing: -0.004em; }
+.heading-6 { font-family: var(--font-sans); font-size: 16px; line-height: 1.5; font-weight: 600; letter-spacing: 0; }
+.body-lg { font-family: var(--font-sans); font-size: 19px; line-height: 1.68; font-weight: 400; letter-spacing: -0.004em; }
+.body { font-family: var(--font-sans); font-size: 16px; line-height: 1.65; font-weight: 400; letter-spacing: 0; }
+.body-sm { font-family: var(--font-sans); font-size: 14px; line-height: 1.6; font-weight: 400; letter-spacing: 0; }
+.caption { font-family: var(--font-sans); font-size: 12px; line-height: 1.5; font-weight: 400; letter-spacing: 0.01em; }
+.label { font-family: var(--font-sans); font-size: 13px; line-height: 1.4; font-weight: 500; letter-spacing: 0.005em; }
+.button { font-family: var(--font-sans); font-size: 15px; line-height: 1.2; font-weight: 600; letter-spacing: -0.003em; }
+.overline { font-family: var(--font-sans); font-size: 12px; line-height: 1.4; font-weight: 600; letter-spacing: 0.08em; }
+.kpi { font-family: var(--font-sans); font-size: 48px; line-height: 1.0; font-weight: 600; letter-spacing: -0.025em; }
+.data { font-family: var(--font-mono); font-size: 13px; line-height: 1.5; font-weight: 400; letter-spacing: 0; }
+.code { font-family: var(--font-mono); font-size: 13px; line-height: 1.6; font-weight: 400; letter-spacing: 0; }
