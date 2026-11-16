@@ -1,24 +1,26 @@
-// home.js — 홈: 스크롤에 맞춰 같은 미니어처가 도면 → 재단 → 조립 → 완성으로 변하는 3D 연출 + 컬렉션.
+// home.js — 홈: 스크롤에 맞춰 같은 가구 모델이 실물 → 분해도 → 삼면도 → 평면 → 미니어처로 바뀌는 3D 연출 + 컬렉션.
+// 도면은 따로 그린 그림이 아니라 같은 모델의 다른 투영이라는 것을 보여 준다.
 
-import { h, icon, store, thumb, no3, pips, tick, esc } from './dom.js';
+import { h, icon, store, thumb, no3, pips, esc } from './dom.js';
 import { CATALOG, CATS, getItem, searchText } from '../data/catalog.js';
 import { buildModel } from '../core/kit.js';
 import { fmt } from '../core/scale.js';
 import { cutList } from '../core/cutlist.js';
 
 const FEATURED = ['billy', 'poang', 'strandmon', 'raskog', 'hemnes-dresser', 'kallax'];
-// 장면별 연출값: 도면선 비율(split), 분해(explode), 카메라 방위·고도
+// 장면별 연출값: 도면선 비율(split), 분해(explode), 카메라 방위·고도, 가구가 서는 쪽(side: 문구의 반대편, +1 오른쪽)
+// 방 배경(첫 장)과 커팅 매트(끝 장), 치수선(삼면도·평면)은 진행률 구간으로 켜고 끈다(apply).
 const KEYS = [
-  { split: 0, explode: 0, theta: -30, phi: 71 },
-  { split: 1, explode: 0, theta: 22, phi: 73 },
-  { split: 0, explode: 1, theta: 48, phi: 66 },
-  { split: 0, explode: 0.28, theta: 92, phi: 69 },
-  { split: 0, explode: 0, theta: 138, phi: 72 },
+  { split: 0, explode: 0, theta: 35, phi: 68, side: 1 },     // 실물: 방에 놓인 가구
+  { split: 0, explode: 1, theta: 48, phi: 66, side: -1 },    // 분해도: 부품과 기호
+  { split: 1, explode: 0, theta: 0, phi: 88, side: 1 },      // 삼면도: 정면 + 치수선
+  { split: 1, explode: 0, theta: 0, phi: 4, side: -1 },      // 평면: 위에서 본 모습
+  { split: 0, explode: 0, theta: -32, phi: 70, side: 1 },    // 완성: 커팅 매트 위 실제 크기
 ];
 const CHAPTERS = [
-  { n: '01', k: '도면', t: '삼면도부터 뽑습니다', d: '정면·평면·측면도와 분해도, 부품도가 고른 축척에 맞춰 자동으로 그려집니다. 치수는 미니어처 기준 mm로 바로 읽습니다.' },
-  { n: '02', k: '재단', t: '부품을 잘라 냅니다', d: '재단표가 필요한 판재·각재·철사를 두께별로 묶어 줍니다. 1:1 템플릿을 인쇄해 재료에 붙이고 선을 따라 자르면 됩니다.' },
-  { n: '03', k: '조립', t: '순서대로 붙입니다', d: '단계마다 새로 붙일 부품이 3D로 날아와 제자리를 찾습니다. 요령과 함께 한 단계씩 체크하며 진행합니다.' },
+  { n: '01', k: '분해도', t: '부품으로 나누면 구조가 보입니다', d: '가구를 부품 단위로 풀고 A, B, C 기호를 붙입니다. 같은 기호가 부품표와 재단표, 조립 순서에 그대로 쓰입니다.' },
+  { n: '02', k: '삼면도', t: '정면에서 보면 치수가 읽힙니다', d: '같은 3D 모델을 정면·평면·측면으로 비춰 삼면도를 그립니다. 치수선의 숫자는 모델에서 직접 잰 값이고, 도면 시트에서는 고른 축척의 mm로 바뀝니다.' },
+  { n: '03', k: '재단', t: '위에서 보면 자를 판이 정해집니다', d: '재단표가 필요한 판재·각재·철사를 두께별로 묶어 줍니다. 1:1 템플릿을 인쇄해 재료에 붙이고 선을 따라 자르면 됩니다.' },
   { n: '04', k: '완성', t: '손바닥 위에 올립니다', d: '완성 모습은 커팅 매트와 15cm 자, 500원 동전 옆에서 실제 크기로 확인합니다. STL로 내보내 3D 프린트할 수도 있습니다.' },
 ];
 
@@ -31,38 +33,41 @@ export function homePage(root, ctx) {
   const page = h('div', { class: 'page' });
 
   // ───── 스토리
-  const hud = {
-    code: h('span', { class: 'mono' }), scale: h('span', { class: 'mono' }, `1:${N}`), az: h('span', { class: 'mono' }, 'AZ 000°'),
-    size: h('span', { class: 'mono' }), chap: h('b', {}, '완성 모습'),
-  };
   const host = h('div', { class: 'shot__host' });
   const poster = h('img', { class: 'shot__poster', src: thumb(feat), alt: '' });
-  const frame = h('div', { class: 'shot__frame' }, host, poster,
-    h('div', { class: 'hud hud--tl' }, hud.code), h('div', { class: 'hud hud--tr' }, h('span', {}, '축척 '), hud.scale),
-    h('div', { class: 'hud hud--bl' }, hud.az), h('div', { class: 'hud hud--br' }, hud.size),
-    h('div', { class: 'hud hud--c' }, hud.chap));
+  const frame = h('div', { class: 'shot__frame' }, host, poster);
   const chips = h('div', { class: 'seg', role: 'group', 'aria-label': '보여 줄 가구' }, FEATURED.map((id) => {
     const it = getItem(id);
     return h('button', { type: 'button', 'aria-pressed': String(id === feat), onclick: () => setFeat(id) }, it.name.split(' ')[0]);
   }));
-  const stageCol = h('div', { class: 'story__stage' }, frame, h('div', { class: 'story__veil' }), h('div', { class: 'shot__cap' }, chips, h('a', { class: 'btn btn--sm', href: `#item-${feat}`, id: 'hero-open' }, '이 가구 만들기')));
+  const stageCol = h('div', { class: 'story__stage' }, frame, h('div', { class: 'shot__cap' }, chips, h('a', { class: 'btn btn--sm', href: `#item-${feat}`, id: 'hero-open' }, '이 가구 만들기')));
+  const toCollection = (e) => { e.preventDefault(); document.getElementById('collection').scrollIntoView({ behavior: 'smooth' }); };
 
-  const hero = h('article', { class: 'chapter chapter--hero', dataset: { ch: '0' } },
+  const hero = h('article', { class: 'chapter chapter--hero', dataset: { ch: '0' } }, h('div', { class: 'copy' },
     h('h1', { html: '백 개의 가구를<br><em>손바닥 위에.</em>' }),
     h('p', { class: 'hero__lead' }, '도면을 뽑고, 재료를 자르고, 순서대로 붙이면 미니어처가 됩니다. 책장부터 소파까지 100가지 가구의 삼면도·재단표·조립 순서·3D 모델을 한곳에 담았습니다.'),
     h('div', { class: 'hero__cta' },
-      h('a', { class: 'btn btn--lg btn--mat', href: '#collection', onclick: (e) => { e.preventDefault(); document.getElementById('collection').scrollIntoView({ behavior: 'smooth' }); } }, '컬렉션 보기'),
+      h('a', { class: 'btn btn--lg btn--mat', href: '#collection', onclick: toCollection }, '컬렉션 보기'),
       h('a', { class: 'btn btn--lg', href: '#guide' }, '처음이라면: 만드는 법')),
     h('dl', { class: 'hero__facts' },
       h('div', {}, h('dt', {}, '100'), h('dd', {}, '가구')),
       h('div', {}, h('dt', {}, '138'), h('dd', {}, '크기·구성 변형')),
       h('div', {}, h('dt', {}, '1,824'), h('dd', {}, '부품')),
       h('div', {}, h('dt', {}, '1:6–1:48'), h('dd', {}, '다섯 가지 축척'))),
-    h('p', { class: 'scrollcue' }, h('span', { html: icon('down') }), '스크롤하면 만드는 과정이 이어집니다'));
-  const chapEls = [hero, ...CHAPTERS.map((c, i) => h('article', { class: 'chapter', dataset: { ch: String(i + 1) } },
-    h('span', { class: 'eyebrow' }, `${c.n} — ${c.k}`), h('h2', {}, c.t), h('p', {}, c.d),
-    i === 3 ? h('div', { class: 'hero__cta', style: { marginTop: '0' } }, h('a', { class: 'btn btn--mat', href: '#collection', onclick: (e) => { e.preventDefault(); setView('room'); document.getElementById('collection').scrollIntoView({ behavior: 'smooth' }); } }, '3D 쇼룸 둘러보기'), h('a', { class: 'btn', href: '#collection', onclick: (e) => { e.preventDefault(); document.getElementById('collection').scrollIntoView({ behavior: 'smooth' }); } }, '목록으로 고르기')) : null))];
-  const story = h('section', { class: 'story', 'aria-label': '만드는 과정' }, stageCol, h('div', { class: 'story__text wrap' }, chapEls));
+    h('p', { class: 'scrollcue' }, h('span', { html: icon('down') }), '스크롤하면 같은 가구가 도면으로 바뀝니다')));
+  // 끝 장: 같은 모습을 실물과 도면으로 바꿔 본다
+  let drawView = false;
+  const viewSeg = h('div', { class: 'seg', role: 'group', 'aria-label': '보기 방식' }, [['real', '실물'], ['draw', '도면']].map(([id, label]) =>
+    h('button', { type: 'button', dataset: { v: id }, 'aria-pressed': String(id === 'real'), onclick: () => {
+      drawView = id === 'draw'; KEYS[4].split = drawView ? 1 : 0;
+      for (const b of viewSeg.children) b.setAttribute('aria-pressed', String(b.dataset.v === id));
+      apply(true);
+    } }, label)));
+  const chapEls = [hero, ...CHAPTERS.map((c, i) => h('article', { class: `chapter${i % 2 === 0 ? ' chapter--right' : ''}`, dataset: { ch: String(i + 1) } }, h('div', { class: 'copy' },
+    h('p', { class: 'overline' }, `${c.n} — ${c.k}`), h('h2', {}, c.t), h('p', {}, c.d),
+    i === 3 ? viewSeg : null,
+    i === 3 ? h('div', { class: 'hero__cta' }, h('a', { class: 'btn btn--mat', href: '#collection', onclick: (e) => { e.preventDefault(); setView('room'); document.getElementById('collection').scrollIntoView({ behavior: 'smooth' }); } }, '3D 쇼룸 둘러보기'), h('a', { class: 'btn', href: '#collection', onclick: toCollection }, '목록으로 고르기')) : null)))];
+  const story = h('section', { class: 'story', 'aria-label': '실물에서 도면, 미니어처까지' }, stageCol, h('div', { class: 'story__text wrap' }, chapEls));
 
   // ───── 컬렉션
   const f = { cat: 'all', q: '', sort: 'no', view: 'grid' };
@@ -176,19 +181,16 @@ export function homePage(root, ctx) {
     poster.src = thumb(id);
     load();
   }
+  const on = { scene: null, mini: null, dims: null };      // 지금 장면에 켜져 있는 것(구간이 바뀔 때만 다시 건다)
   function load() {
     const it = getItem(feat);
     model = buildModel(it, { N });
-    const [w, hh, d] = model.bbox.size;
-    tick(hud.code, `MN-${no3(it.no)} ${it.name}`);
-    tick(hud.size, `${fmt(w / N, 1)} × ${fmt(d / N, 1)} × ${fmt(hh / N, 1)} mm`);
-    if (stage) { stage.setModel(model, it.finishes[0]); stage.setMini(true, N); calls(); apply(true); }
+    if (stage) { stage.setModel(model, it.finishes[0]); on.scene = on.mini = on.dims = null; calls(); apply(true); }
   }
   const wide = () => window.innerWidth > 1040;
   function calls() {
     const rows = cutList(model).rows.filter((r) => !r.opt).slice(0, 7);
-    stage.setCallouts(rows.map((r) => ({ id: r.parts[0], text: `${r.label} ${r.name}` })));
-    stage.viewShift = wide() ? [0.19, 0] : null;
+    stage.setCallouts(rows.map((r) => ({ id: r.parts[0], text: r.label, name: r.name })));
   }
   let prog = 0;
   function measure() {
@@ -204,43 +206,44 @@ export function homePage(root, ctx) {
     if (!force && Math.abs(p - prog) < 0.002) return;
     prog = p;
     const i = Math.min(KEYS.length - 2, Math.floor(p)), t = sm(Math.min(1, p - i)), a = KEYS[i], b = KEYS[i + 1];
-    const idx = Math.round(p);
-    hud.chap.textContent = idx === 0 ? '완성 모습' : `${CHAPTERS[idx - 1].n} ${CHAPTERS[idx - 1].k}`;
-    chapEls.forEach((el, k) => el.classList.toggle('is-on', k === idx));
     if (!stage) return;
+    // 방은 첫 장에만, 커팅 매트는 끝 장에만 놓인다. 바뀌는 순간이 화면에 보이지 않는 구간(분해 중, 도면선으로 덮인 뒤)에서 바꾼다.
+    const mini = p > 3.02, scene = !mini && p < 0.6 ? 'room' : 'studio', dims = p > 1.55 && p < 3.45;
+    if (mini !== on.mini) { stage.setMini(mini, N); on.mini = mini; }
+    if (scene !== on.scene) { stage.setScene(scene); on.scene = scene; }
+    if (dims !== on.dims) { stage.setDims(dims); on.dims = dims; }
     stage.setSplit(lerp(a.split, b.split, t));
     stage.setExplode(lerp(a.explode, b.explode, t), false);
     stage.goal.theta = (lerp(a.theta, b.theta, t) * Math.PI) / 180;
     stage.goal.phi = (lerp(a.phi, b.phi, t) * Math.PI) / 180;
+    // 가구는 문구의 반대편에 선다. 좁은 화면에서는 문구가 아래에 있으니 위로 올린다.
+    stage.viewShift = wide() ? [0.19 * lerp(a.side, b.side, t), 0] : [0, -0.2];
+    stage.fitScale = wide() ? 1.3 : 2;      // 좁은 화면은 문구 위에 남는 높이에 가구가 다 들어오게 물러선다
     stage.fit(false, true);
   }
-  const onScroll = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { if (stage) stage.viewShift = wide() ? [0.19, 0] : null; apply(false); }); };
+  const onScroll = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => apply(false)); };
+  const onResize = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => apply(true)); };
   window.addEventListener('scroll', onScroll, { passive: true });
-  window.addEventListener('resize', onScroll);
+  window.addEventListener('resize', onResize);
   load();
-  apply(true);
 
   import('../three/stage.js').then(({ Stage, webglSupported }) => {
     if (disposed || !webglSupported()) return;
-    stage = new Stage(host, { maxDpr: ctx.lowPower ? 1.25 : 2, samples: ctx.lowPower ? 40 : 72,
-      onFrame: (s) => { const az = (((s.cam.theta * 180) / Math.PI) % 360 + 360) % 360; hud.az.textContent = `AZ ${String(Math.round(az)).padStart(3, '0')}°  EL ${String(Math.round(90 - (s.cam.phi * 180) / Math.PI)).padStart(2, '0')}°`; } });
-    stage.fitScale = 1.3;
-    stage.canvas.setAttribute('aria-label', '미니어처 3D 미리보기. 페이지를 스크롤하면 도면, 재단, 조립, 완성 순서로 바뀝니다.');
+    stage = new Stage(host, { maxDpr: ctx.lowPower ? 1.25 : 2, samples: ctx.lowPower ? 40 : 72 });
+    stage.canvas.setAttribute('aria-label', '가구 3D 미리보기. 페이지를 스크롤하면 실물, 분해도, 삼면도, 평면, 완성된 미니어처 순서로 바뀝니다.');
     stage.setTheme({ dark: ctx.isDark() });
-    stage.setLineTheme('blueprint');
-    stage.mini = true; stage.N = N;
-    const it = getItem(feat);
-    stage.setModel(model, it.finishes[0]);
-    stage.setMini(true, N);
+    stage.setLineTheme(ctx.isDark() ? 'canvasDark' : 'canvas');
+    stage.N = N;
+    stage.setModel(model, getItem(feat).finishes[0]);
     calls();
     apply(true);
     requestAnimationFrame(() => { poster.style.opacity = '0'; });
-    ctx.onTheme = () => { if (stage) stage.setTheme({ dark: ctx.isDark() }); if (room) room.setTheme(ctx.isDark()); };
+    ctx.onTheme = () => { if (stage) { stage.setTheme({ dark: ctx.isDark() }); stage.setLineTheme(ctx.isDark() ? 'canvasDark' : 'canvas'); } if (room) room.setTheme(ctx.isDark()); };
   }).catch(() => {});
 
   return () => {
     disposed = true; ctx.onTheme = null;
-    window.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onScroll);
+    window.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onResize);
     cancelAnimationFrame(raf);
     closeRoom();
     if (stage) stage.dispose();

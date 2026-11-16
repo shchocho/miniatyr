@@ -58,6 +58,9 @@ const LINE_THEMES = {
   blueprint: { bg: '#143d68', fill: '#1a4a7c', line: '#eaf3fb' },
   paper: { bg: '#f4f5f2', fill: '#fbfbf9', line: '#18221e' },
   night: { bg: '#0f1a16', fill: '#14231d', line: '#bfe3d3' },
+  // 홈의 스크롤 연출: 페이지 바탕과 같은 종이 위에 잉크 선(문구 패널이 바탕에 녹는다)
+  canvas: { bg: '#f5f4f0', fill: '#fbfaf7', line: '#141413' },
+  canvasDark: { bg: '#0e0e0d', fill: '#171716', line: '#edece7' },
 };
 
 // 스튜디오 조명 배치. 환경맵(반사)과 누적 렌더의 면광원 표본이 같은 표를 쓴다.
@@ -268,7 +271,7 @@ export class Stage {
   }
 
   _buildDims() {
-    this.dimLines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: '#f4c430', depthTest: false, transparent: true }));
+    this.dimLines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: '#2f5d46', depthTest: false, transparent: true }));
     this.dimLines.renderOrder = 999; this.dimLines.visible = false; this.dimLines.frustumCulled = false;
     this.scene.add(this.dimLines);
     this.labelBox = document.createElement('div');
@@ -280,6 +283,7 @@ export class Stage {
   // ------------------------------------------------------------ public state
   setTheme(theme) {
     this.theme = { ...this.theme, ...theme };
+    if (this.dimLines) this.dimLines.material.color.set(this.theme.dark ? '#8fc7a4' : '#2f5d46');   // 치수선: 강조색
     if (this.coveMat) this.coveMat.color.set(this.theme.cove || (this.theme.dark ? '#2b2b28' : '#dad8d0'));
     this.invalidate();
   }
@@ -598,6 +602,8 @@ export class Stage {
     this.dimLines.geometry = new THREE.BufferGeometry();
     this.dimLines.geometry.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
     this.dimAnchors = [new THREE.Vector3((x0 + x1) / 2, y0, z1 + o), new THREE.Vector3(x1 + o, y0, (z0 + z1) / 2), new THREE.Vector3(x0 - o, (y0 + y1) / 2, z1)];
+    // 각 치수선의 양 끝: 선이 화면에서 점처럼 접히는 시점(정면에서 본 깊이, 위에서 본 높이)에는 숫자를 감춘다
+    this.dimEnds = [[new THREE.Vector3(x0, y0, z1 + o), new THREE.Vector3(x1, y0, z1 + o)], [new THREE.Vector3(x1 + o, y0, z0), new THREE.Vector3(x1 + o, y0, z1)], [new THREE.Vector3(x0 - o, y0, z1), new THREE.Vector3(x0 - o, y1, z1)]];
     this.labelBox.innerHTML = '';
     this.dimLabels = ['폭', '깊이', '높이'].map(() => { const el = document.createElement('span'); el.className = 'stage-dim'; this.labelBox.appendChild(el); return el; });
     this.labelBox.hidden = !this.dimsOn;
@@ -613,11 +619,17 @@ export class Stage {
     });
   }
 
-  /** 분해했을 때 부품에 붙는 라벨. items = [{ id, text }] */
+  /** 분해했을 때 부품에 붙는 라벨. items = [{ id, text, name? }]. name 이 있으면 지시선이 달린 이름표(기호 + 이름)로 그린다. */
   setCallouts(items) {
     if (!this.callBox) { this.callBox = document.createElement('div'); this.callBox.className = 'stage-labels'; this.host.appendChild(this.callBox); }
     this.callBox.innerHTML = '';
-    this.calls = (items || []).map((it) => { const el = document.createElement('span'); el.className = 'stage-call'; el.textContent = it.text; this.callBox.appendChild(el); return { id: it.id, el }; });
+    this.calls = (items || []).map((it) => {
+      const el = document.createElement('span'), lead = !!it.name;
+      el.className = lead ? 'stage-call stage-call--lead' : 'stage-call';
+      if (lead) { const no = document.createElement('i'); no.textContent = it.text; const nm = document.createElement('span'); nm.textContent = it.name; el.append(no, nm); } else el.textContent = it.text;
+      this.callBox.appendChild(el);
+      return { id: it.id, el, lead };
+    });
     this.invalidate();
   }
 
@@ -629,16 +641,23 @@ export class Stage {
         if (!on || !mesh || !mesh.visible) { c.el.style.opacity = '0'; continue; }
         const p = mesh.userData.part;
         v.set(mesh.position.x - p.pos[0] + p.center[0], mesh.position.y - p.pos[1] + p.center[1], mesh.position.z - p.pos[2] + p.center[2]).project(this.camera);
-        c.el.style.transform = `translate(-50%,-50%) translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px)`;
+        c.el.style.transform = `translate(${c.lead ? '0' : '-50%'},-50%) translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px)`;
         c.el.style.opacity = String(Math.min(1, (this.explode - 0.4) * 3.5));
       }
     }
     if (!this.dimsOn || !this.dimAnchors) return;
     const w = this.host.clientWidth, h = this.host.clientHeight, v = new THREE.Vector3();
+    // 화면에서 1mm 가 몇 px 로 보이는지: 다른 치수보다 크게 접혀 보이는 선의 숫자는 감춘다
+    const shown = this.dimEnds.map(([p0, p1]) => {
+      v.copy(p0).project(this.camera); const ax = (v.x * w) / 2, ay = (v.y * h) / 2;
+      v.copy(p1).project(this.camera);
+      return Math.hypot((v.x * w) / 2 - ax, (v.y * h) / 2 - ay) / Math.max(1, p0.distanceTo(p1));
+    });
+    const best = Math.max(...shown);
     this.dimLabels.forEach((el, i) => {
       v.copy(this.dimAnchors[i]).project(this.camera);
       el.style.transform = `translate(-50%,-50%) translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px)`;
-      el.style.opacity = v.z < 1 ? '1' : '0';
+      el.style.opacity = v.z < 1 && shown[i] > best * 0.3 ? '1' : '0';
     });
   }
 
