@@ -7,7 +7,8 @@ import { buildModel } from '../core/kit.js';
 import { fmt } from '../core/scale.js';
 import { cutList } from '../core/cutlist.js';
 
-const FEATURED = ['billy', 'poang', 'strandmon', 'raskog', 'hemnes-dresser', 'kallax'];
+// 간판 가구: 편집 순번 1~6(책장·선반·암체어·테이블·수납·소파 한 점씩)
+const FEATURED = ['billy', 'kallax', 'poang', 'lack-side', 'malm-dresser', 'klippan'];
 // 장면별 연출값: 도면선 비율(split), 분해(explode), 카메라 방위·고도, 가구가 서는 쪽(side: 문구의 반대편, +1 오른쪽)
 // 방 배경(첫 장)과 커팅 매트(끝 장), 치수선(삼면도·평면)은 진행률 구간으로 켜고 끈다(apply).
 const KEYS = [
@@ -207,10 +208,12 @@ export function homePage(root, ctx) {
     prog = p;
     const i = Math.min(KEYS.length - 2, Math.floor(p)), t = sm(Math.min(1, p - i)), a = KEYS[i], b = KEYS[i + 1];
     if (!stage) return;
-    // 방은 첫 장에만, 커팅 매트는 끝 장에만 놓인다. 바뀌는 순간이 화면에 보이지 않는 구간(분해 중, 도면선으로 덮인 뒤)에서 바꾼다.
-    const mini = p > 3.02, scene = !mini && p < 0.6 ? 'room' : 'studio', dims = p > 1.55 && p < 3.45;
+    // 방은 첫 장에 서 있다가, 분해가 시작되면 벽과 소품이 바닥 아래로 천천히 내려간다(거꾸로 올리면 다시 선다).
+    // 벽이 다 내려간 뒤 부품이 흩어지는 동안 바닥을 스튜디오로 바꾸고, 커팅 매트는 도면선이 화면을 다 덮은 구간에서 놓는다.
+    const mini = p > 3.02, scene = !mini && p < 0.5 ? 'room' : 'studio', dims = p > 1.55 && p < 3.45;
     if (mini !== on.mini) { stage.setMini(mini, N); on.mini = mini; }
     if (scene !== on.scene) { stage.setScene(scene); on.scene = scene; }
+    stage.setRoomSink(sm(Math.max(0, Math.min(1, (p - 0.04) / 0.4))));
     if (dims !== on.dims) { stage.setDims(dims); on.dims = dims; }
     stage.setSplit(lerp(a.split, b.split, t));
     stage.setExplode(lerp(a.explode, b.explode, t), false);
@@ -229,7 +232,7 @@ export function homePage(root, ctx) {
 
   import('../three/stage.js').then(({ Stage, webglSupported }) => {
     if (disposed || !webglSupported()) return;
-    stage = new Stage(host, { maxDpr: ctx.lowPower ? 1.25 : 2, samples: ctx.lowPower ? 40 : 72 });
+    stage = new Stage(host, { maxDpr: ctx.lowPower ? 1.25 : 2, samples: ctx.lowPower ? 40 : 72, daylight: true });
     stage.canvas.setAttribute('aria-label', '가구 3D 미리보기. 페이지를 스크롤하면 실물, 분해도, 삼면도, 평면, 완성된 미니어처 순서로 바뀝니다.');
     stage.setTheme({ dark: ctx.isDark() });
     stage.setLineTheme(ctx.isDark() ? 'canvasDark' : 'canvas');

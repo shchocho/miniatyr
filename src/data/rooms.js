@@ -469,7 +469,8 @@ export function itemRoom(item, model, { finish = null, seed = 0 } = {}) {
   const kind = item.cat, tall = h0 + lift >= 1300, soft = kind === 'sofa' || kind === 'bed';
   const frames = pick(R, ['black', 'oak', 'white', 'brass']), rugA = pick(R, ['fab-natural', 'fab-cream', 'jute', 'fab-gray']), accent = pick(R, PR.ACCENTS);
   // 창과 커튼: 왼쪽 벽
-  r.window('left', Math.max(1500, iz1 + 700), { w: 1300, h: 1400, sill: 850, curtain: pick(R, ['linen', 'linen', 'fab-cream', 'fab-blush']) });
+  const win = { c: Math.max(1500, iz1 + 700), w: 1300, h: 1400, sill: 850 };
+  r.window('left', win.c, { w: win.w, h: win.h, sill: win.sill, curtain: pick(R, ['linen', 'linen', 'fab-cream', 'fab-blush']) });
   // 왼쪽 구석의 큰 화분
   r.plant(ix0 - Lw * 0.52, Math.max(380, iz0 + 300), pick(R, ['rubber', 'monstera', 'snake', 'rubber']), 1 + R() * 0.1, pick(R, ['terracotta', 'ceramic', 'basket', 'ceramic-black']));
   // 벽 그림: 낮은 가구는 위에, 키 큰 가구는 오른쪽 벽면에
@@ -529,6 +530,8 @@ export function itemRoom(item, model, { finish = null, seed = 0 } = {}) {
   move([shell.floor, shell.walls.back, shell.walls.left]);
   return {
     floor: shell.floor, lift, H, planes: { xl, zb },
+    // 왼쪽 벽 창의 바깥 틀(모델 좌표): 창으로 드는 햇빛을 만들 때 쓴다
+    window: { x: xl, y: win.sill + win.h / 2 - lift, z: win.c + zb, w: win.w, h: win.h },
     walls: [{ name: 'back', part: shell.walls.back, decor: seg(r.k.back) }, { name: 'left', part: shell.walls.left, decor: seg(r.k.left) }],
     base: seg(r.k.base),
   };

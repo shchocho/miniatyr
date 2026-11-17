@@ -72,6 +72,10 @@ const SOFTBOXES = [
   { name: 'rim', size: [3.5, 12], pos: [7, 8, -13], color: '#ffffff', k: 7 },
 ];
 const ROOM_L = 0.057;
+// 창으로 드는 햇빛(daylight 룸): 키 라이트를 따뜻한 해로 바꾸고, 원판을 좁혀 창살 그림자가 또렷하게 남게 한다
+const KEY = { color: 0xfff6ec, k: 3.0, spread: 0.062 };
+const SUN = { color: 0xffe4bf, k: 6.0, spread: 0.014, amb: 0.7, ibl: 0.12 }; // amb·ibl: 그늘을 밝히는 보조광 몫
+const ROOM_DOF = 0.007; // 룸 첫 장의 조리개 반지름(카메라 거리 대비): 가구에 초점, 앞바닥과 뒷벽은 살짝 흐리게
 
 /** 소프트박스 스튜디오를 PMREM 환경맵으로 굽는다(렌더러마다 하나씩 필요). */
 export function studioEnv(renderer) {
@@ -111,7 +115,9 @@ export class Stage {
     this.onFrame = opts.onFrame || null;
     this.interactive = opts.interactive !== false;
     this.sceneKind = opts.scene === 'room' ? 'room' : 'studio'; // 배경: 스튜디오(호리존) | 룸(벽·바닥·소품)
-    this.roomWalls = []; this.styling = null; this.roomPlanes = null;
+    this.daylight = !!opts.daylight; // 룸을 왼쪽 벽 창으로만 드는 햇빛과 얕은 심도로 찍는다(홈 첫 장)
+    this.roomSink = null;            // 0~1: 벽·소품이 바닥 아래로 내려간 정도. null 이면 분해하는 동안 방을 감춘다(워크벤치)
+    this.roomWalls = []; this.styling = null; this.roomPlanes = null; this.roomBase = null; this.roomH = 0; this.sun = null;
 
     const r = (this.renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, premultipliedAlpha: true, powerPreference: 'high-performance', preserveDrawingBuffer: !!opts.preserve }));
     this.dpr = Math.min(opts.pixelRatio ?? window.devicePixelRatio ?? 1, opts.maxDpr ?? 2);
@@ -179,7 +185,7 @@ export class Stage {
     // 누적 렌더용 로브: 방향, 퍼짐각, 수직 입사 조도(E = 휘도 × 입체각)
     const lobes = SOFTBOXES.map((b) => {
       const p = new THREE.Vector3(b.pos[0], b.pos[1] - 1.5, b.pos[2]), d2 = p.lengthSq();
-      return { dir: p.clone().normalize(), spread: Math.atan(Math.max(b.size[0], b.size[1]) / 2 / Math.sqrt(d2)), E: ((b.k * b.size[0] * b.size[1]) / d2) * ENV_INTENSITY, color: new THREE.Color(b.color) };
+      return { name: b.name, dir: p.clone().normalize(), spread: Math.atan(Math.max(b.size[0], b.size[1]) / 2 / Math.sqrt(d2)), E: ((b.k * b.size[0] * b.size[1]) / d2) * ENV_INTENSITY, color: new THREE.Color(b.color) };
     });
     lobes.push({ dir: null, spread: 0, E: 2 * Math.PI * ROOM_L * ENV_INTENSITY, color: new THREE.Color('#f4f7ff') });
     const total = lobes.reduce((a, l) => a + l.E, 0);
@@ -352,8 +358,18 @@ export class Stage {
   /** 룸 배경이 실제로 켜져 있는가(컷아웃·미니어처 보기에서는 쓰지 않는다). */
   get roomOn() { return !this.cutout && !this.mini && this.sceneKind === 'room' && !!this.model; }
 
-  /** 룸을 지금 그리는가: 분해·조립 중에는 부품이 벽을 뚫지 않게 스튜디오 배경으로 돌아간다. */
-  get roomShown() { return this.roomOn && this.explode < 0.02 && this.explodeGoal < 0.02 && this.step == null; }
+  /**
+   * 룸을 지금 그리는가: 분해·조립 중에는 부품이 벽을 뚫지 않게 스튜디오 배경으로 돌아간다.
+   * roomSink 를 쓰면(홈) 방은 남고, 벽과 소품이 바닥 아래로 내려간다.
+   */
+  get roomShown() { return this.roomOn && this.step == null && (this.roomSink != null || (this.explode < 0.02 && this.explodeGoal < 0.02)); }
+
+  /** 0 = 방이 서 있음, 1 = 벽·소품이 모두 바닥 아래. null = 예전처럼 분해하면 방을 감춘다. */
+  setRoomSink(v) {
+    const n = v == null ? null : Math.max(0, Math.min(1, v));
+    if (n === this.roomSink) return;
+    this.roomSink = n; this.shadowDirty = true; this.invalidate();
+  }
 
   /** 배경을 바꾼다: 'studio' = 무한 호리존, 'room' = 벽·바닥·소품이 있는 방 한 귀퉁이. */
   setScene(kind) {
@@ -483,7 +499,7 @@ export class Stage {
       o.traverse((c) => { if (c.geometry) c.geometry.dispose(); if (!c.userData.libMat) for (const m of [].concat(c.material || [])) m.dispose(); });
       this.props.remove(o);
     }
-    this.roomWalls = []; this.styling = null; this.roomPlanes = null;
+    this.roomWalls = []; this.styling = null; this.roomPlanes = null; this.roomBase = null; this.sun = null; this.sunCeil = null;
     const R = this.R;
     if (this.cutout) {
       this.ground.scale.set(R * 14, R * 14, 1);
@@ -541,11 +557,45 @@ export class Stage {
       this.props.add(g);
       g.add(mergedGroup([w.part], this.lib, { detail: 1, cast: false }), decorGroup(w.decor, this.lib, this.assets, { detail: 1, onReady: this._redraw }));
       this.roomWalls.push({ name: w.name, group: g });
+      if (w.name === 'left' && this.daylight && spec.window) this._buildSun(spec, g);
     }
-    add(spec.base, true);
+    this.roomBase = add(spec.base, true);
     const sp = styleModel(item, this.model, { finish: this.finish });
     if (sp.length) this.styling = add(sp, true);
-    this.roomPlanes = spec.planes;
+    this.roomPlanes = spec.planes; this.roomH = spec.H;
+  }
+
+  /**
+   * 창으로만 드는 햇빛: 창 자리만 뚫린 벽과 천장 모양의 보이지 않는 가림막을 왼쪽 벽 그룹에 넣는다(벽과 함께 가라앉는다).
+   * 화면에는 그리지 않고 키 라이트의 그림자 지도에만 그린다. 창틀과 창살은 벽 소품이 스스로 그림자를 드리운다.
+   */
+  _buildSun(spec, group) {
+    const s = spec.window, top = spec.H - spec.lift, B = 40000, t = 10, x = s.x - 45;
+    const y0 = s.y - s.h / 2, y1 = s.y + s.h / 2, z0 = s.z - s.w / 2, z1 = s.z + s.w / 2;
+    const mat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, side: THREE.DoubleSide });
+    // 보조광(돔)의 그림자 지도에서는 점 하나로 접어 아무것도 가리지 않게 한다
+    // 키 소프트박스 쪽에서 오는 보조광 표본(domeSun)도 창을 거치게 한다. 그 밖의 보조광은 방 전체를 낮게 밝힌다.
+    const keyOnly = (r, o, cam, sc) => { if (sc !== this.key.shadow.camera && !(this.domeSun && sc === this.dome.shadow.camera)) o.modelViewMatrix.makeScale(0, 0, 0); };
+    for (const [a, b] of [
+      [[x - t, -B, -B], [x, y0, B]],         // 창 아래 벽
+      [[x - t, y1, -B], [x, top, B]],        // 창 위 벽
+      [[x - t, y0, -B], [x, y1, z0]],        // 창 안쪽(뒷벽 쪽) 벽
+      [[x - t, y0, z1], [x, y1, B]],         // 창 바깥쪽(앞) 벽
+      [[x - t, top, -B], [B, top + t, B]],   // 천장(벽이 내려가기 시작하면 걷는다: 벽 위로 햇빛이 넘어 들어온다)
+    ]) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(b[0] - a[0], b[1] - a[1], b[2] - a[2]), mat);
+      m.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
+      m.castShadow = true; m.frustumCulled = false; m.onBeforeShadow = keyOnly;
+      group.add(m);
+      if (a[1] === top) this.sunCeil = m;
+    }
+    // 해는 창 한가운데를 지나 가구 바로 앞 바닥에 창 모양(창살 십자)을 떨군다. 무늬의 먼 끝이 가구 아래쪽으로 올라탄다.
+    // 너무 낮으면 빛 무늬가 길게 늘어지므로 고도를 24° 이상으로 둔다.
+    const aim = new THREE.Vector3(this.center.x + (this.bbMax.x - this.bbMin.x) * 0.1, -spec.lift, this.bbMax.z + 400);
+    const dir = new THREE.Vector3(s.x, s.y, s.z).sub(aim).normalize(), lo = Math.sin(24 * D2R);
+    if (dir.y < lo) { const k = Math.sqrt((1 - lo * lo) / (dir.x * dir.x + dir.z * dir.z)); dir.x *= k; dir.z *= k; dir.y = lo; }
+    // reach: 그림자 카메라가 바닥에서 천장 가림막까지 담아야 하는 거리
+    this.sun = { dir, reach: (spec.H + 400) / dir.y + this.R * 2 };
   }
 
   _applyVisibility() {
@@ -780,24 +830,28 @@ export class Stage {
 
   _lights(jitter, i) {
     const R = this.R * (1 + this.explode * 0.8), c = this.center, D = R * 6;
-    const fitShadow = (L, dir, pad) => {
-      L.position.copy(c).addScaledVector(dir, D);
+    // back: 중심에서 빛 쪽으로 그림자 지도에 담을 거리. Rs: 그림자 지도가 덮는 반경.
+    const fitShadow = (L, dir, pad, back = R * 3, Rs = R) => {
+      const Dl = Math.max(D, back + R);
+      L.position.copy(c).addScaledVector(dir, Dl);
       L.target.position.copy(c);
       const s = L.shadow.camera;
-      s.left = -R * pad; s.right = R * pad; s.top = R * pad; s.bottom = -R * pad; s.near = D - R * 3; s.far = D + R * 5;
+      s.left = -Rs * pad; s.right = Rs * pad; s.top = Rs * pad; s.bottom = -Rs * pad; s.near = Math.max(1, Dl - back); s.far = Dl + Rs * 5;
       s.updateProjectionMatrix();
       L.shadow.normalBias = R * 0.0035;
       L.shadow.needsUpdate = true;
     };
-    const kd = this.keyDir.clone();
+    const sun = this.sun && this.roomShown ? this.sun : null, K = sun ? SUN : KEY;
+    this.key.color.set(K.color); this.key.intensity = K.k;
+    const kd = (sun ? sun.dir : this.keyDir).clone();
     if (jitter) {
-      // 키 라이트를 면광원처럼: 지름 약 7° 원판 위에서 표본
-      const a = halton(i, 2) * Math.PI * 2, r = Math.sqrt(halton(i, 3)) * 0.062;
+      // 키 라이트를 면광원처럼: 원판(보통 지름 약 7°, 햇빛은 약 1.6°) 위에서 표본
+      const a = halton(i, 2) * Math.PI * 2, r = Math.sqrt(halton(i, 3)) * K.spread;
       const t = new THREE.Vector3(0, 1, 0).cross(kd).normalize(), b = kd.clone().cross(t);
       kd.addScaledVector(t, Math.cos(a) * r).addScaledVector(b, Math.sin(a) * r).normalize();
       // 보조광: 소프트박스(와 방 전체)를 조도 비율대로 골라 그 면 위의 한 점을 표본한다.
       // 환경맵 확산광의 대부분을 그림자가 있는 빛으로 바꿔 주변광 차폐와 다중 반그림자를 얻는다.
-      const keep = this.iblAccum ?? 0.3, envE = this.lobeTotal * (1 - keep), total = envE + this.headE;
+      const keep = sun ? SUN.ibl : this.iblAccum ?? 0.3, envE = this.lobeTotal * (1 - keep), total = envE + this.headE;
       let pick = halton(i, 5) * total, lobe;
       const dd = new THREE.Vector3();
       if (pick < this.headE) {
@@ -813,49 +867,60 @@ export class Stage {
         lobe = this.lobes.find((l) => pick <= l.cum) || this.lobes[this.lobes.length - 1];
       }
       if (lobe.dir === undefined) { /* 정면 보조광: 방향 계산 끝 */ } else if (lobe.dir) {
-        const a2 = halton(i, 7) * Math.PI * 2, r2 = Math.sqrt(halton(i, 11)) * Math.tan(lobe.spread);
-        const t2 = new THREE.Vector3(0.3, 1, 0.2).cross(lobe.dir).normalize(), b2 = lobe.dir.clone().cross(t2);
-        dd.copy(lobe.dir).addScaledVector(t2, Math.cos(a2) * r2).addScaledVector(b2, Math.sin(a2) * r2).normalize();
+        // 햇빛 드는 방: 키 소프트박스 몫은 해와 같은 쪽(창으로 드는 하늘빛)에서 조금 넓게 퍼진다
+        const viaWin = sun && lobe.name === 'key', ld = viaWin ? sun.dir : lobe.dir, sp = viaWin ? lobe.spread * 0.5 : lobe.spread;
+        const a2 = halton(i, 7) * Math.PI * 2, r2 = Math.sqrt(halton(i, 11)) * Math.tan(sp);
+        const t2 = new THREE.Vector3(0.3, 1, 0.2).cross(ld).normalize(), b2 = ld.clone().cross(t2);
+        dd.copy(ld).addScaledVector(t2, Math.cos(a2) * r2).addScaledVector(b2, Math.sin(a2) * r2).normalize();
         if (dd.y < 0.06) dd.y = 0.06;
       } else {
         const u = 0.08 + 0.92 * halton(i, 7), ph = halton(i, 11) * Math.PI * 2, sr = Math.sqrt(1 - u * u);
         dd.set(Math.cos(ph) * sr, u, Math.sin(ph) * sr);
       }
-      fitShadow(this.dome, dd.normalize(), this.roomShown ? 2.4 : 1.5);
+      this.domeSun = !!sun && lobe.name === 'key';
+      if (this.domeSun) fitShadow(this.dome, dd.normalize(), 4, sun.reach, Math.max(R, 600));
+      else fitShadow(this.dome, dd.normalize(), this.roomShown ? 2.4 : 1.5);
       this.dome.color.copy(lobe.color);
-      this.dome.intensity = total * (this.domeGain ?? 1);
+      this.dome.intensity = total * (this.domeGain ?? 1) * (sun && !this.domeSun ? SUN.amb : 1);
       this.head.intensity = 0;
       iblDiffuse.value = keep;
       this.key.shadow.radius = 1.6;
     } else {
       if (this.cutout) fitShadow(this.dome, new THREE.Vector3(0.05, 1, 0.05).normalize(), 1.5);
-      this.dome.intensity = 0;
+      this.dome.intensity = 0; this.domeSun = false;
       this.head.intensity = this.headE;
       iblDiffuse.value = 1;
       this.key.shadow.radius = 3.4;
     }
-    fitShadow(this.key, kd, this.roomShown ? 2.6 : 1.6);
+    // 햇빛은 가림막(천장)까지 담고, 화면에 보이는 방 전체를 덮어야 지도 밖이 밝게 새지 않는다
+    if (sun) fitShadow(this.key, kd, 4, sun.reach, Math.max(R, 600));
+    else fitShadow(this.key, kd, this.roomShown ? 2.6 : 1.6);
   }
 
   _renderScene(target, jitter, i) {
-    const r = this.renderer;
+    const r = this.renderer, room = this.roomShown;
+    // 햇빛 드는 방이 온전히 서 있을 때만 렌즈 심도를 준다(분해·벽이 내려가는 중에는 또렷하게)
+    const dof = this.dof || (this.sun && room && this.explode < 0.02 && !(this.roomSink > 0.02) ? ROOM_DOF : 0);
     if (jitter) {
       this._viewOffset(halton(i + 1, 2) - 0.5, halton(i + 1, 3) - 0.5);
-      if (this.dof > 0) {
+      if (dof > 0) {
         // 얇은 렌즈: 조리개 원판 위의 한 점에서 초점(타깃)을 바라본다 → 매크로 사진 같은 얕은 심도
-        const a = halton(i, 13) * Math.PI * 2, rad = Math.sqrt(halton(i, 17)) * this.dof * this.cam.dist;
+        const a = halton(i, 13) * Math.PI * 2, rad = Math.sqrt(halton(i, 17)) * dof * this.cam.dist;
         const rt = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0), up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1);
         this.camera.position.addScaledVector(rt, Math.cos(a) * rad).addScaledVector(up, Math.sin(a) * rad);
         this.camera.lookAt(this.cam.target); this.camera.updateMatrixWorld();
       }
     } else this._viewOffset(0, 0);
     if (jitter || this.shadowDirty) { this._lights(jitter, i); r.shadowMap.needsUpdate = true; this.shadowDirty = jitter; }
-    const room = this.roomShown;
     this.root.visible = true; this.lineRoot.visible = false; this.ground.visible = !room; this.props.visible = room || !this.roomOn;
     if (room) {
-      // 카메라가 벽 뒤로 가면 그 벽은 감춘다
-      const cp = this.camera.position;
-      for (const w of this.roomWalls) w.group.visible = w.name === 'back' ? cp.z > this.roomPlanes.zb : cp.x > this.roomPlanes.xl;
+      // 카메라가 벽 뒤로 가면 그 벽은 감춘다. roomSink 만큼 벽과 바닥 소품을 바닥 아래로 내린다.
+      const cp = this.camera.position, drop = (this.roomSink || 0) * (this.roomH + 300);
+      for (const w of this.roomWalls) { w.group.visible = w.name === 'back' ? cp.z > this.roomPlanes.zb : cp.x > this.roomPlanes.xl; w.group.position.y = -drop; }
+      if (this.roomBase) this.roomBase.position.y = -drop;
+      if (this.sunCeil) this.sunCeil.visible = !drop;
+      // 가구 위에 얹은 책·쿠션은 가구가 풀리기 시작하면 치운다
+      if (this.styling) this.styling.visible = this.explode < 0.02;
     }
     this.dimLines.visible = this.dimsOn;
     if (this.cutout) { this.scene.background = null; r.setClearColor(0x000000, 0); }
@@ -864,7 +929,7 @@ export class Stage {
     r.clear();
     r.render(this.scene, this.camera);
     r.setRenderTarget(null);
-    if (jitter) { if (this.dof > 0) this._placeCamera(); this._viewOffset(0, 0); }
+    if (jitter) { if (dof > 0) this._placeCamera(); this._viewOffset(0, 0); }
   }
 
   /** 모델을 화면 한쪽으로 밀어 그린다(글자와 겹치지 않게). viewShift = [가로, 세로] 비율. */
