@@ -6,6 +6,7 @@ import { CATALOG, CATS, getItem, searchText } from '../data/catalog.js';
 import { buildModel } from '../core/kit.js';
 import { fmt } from '../core/scale.js';
 import { cutList } from '../core/cutlist.js';
+import { SEASONS } from '../data/seasons.js';
 
 // 간판 가구: 편집 순번 1~6(책장·선반·암체어·테이블·수납·소파 한 점씩)
 const FEATURED = ['billy', 'kallax', 'poang', 'lack-side', 'malm-dresser', 'klippan'];
@@ -41,7 +42,14 @@ export function homePage(root, ctx) {
     const it = getItem(id);
     return h('button', { type: 'button', 'aria-pressed': String(id === feat), onclick: () => setFeat(id) }, it.name.split(' ')[0]);
   }));
-  const stageCol = h('div', { class: 'story__stage' }, frame, h('div', { class: 'shot__cap' }, chips, h('a', { class: 'btn btn--sm', href: `#item-${feat}`, id: 'hero-open' }, '이 가구 만들기')));
+  // 계절 테마: 창밖 풍경과 방에 드는 빛, 쿠션·커튼 색이 함께 바뀐다(워크벤치의 룸 배경도 같은 계절을 쓴다)
+  const seasons = h('div', { class: 'seg', role: 'group', 'aria-label': '계절 테마' }, Object.entries(SEASONS).map(([id, s]) =>
+    h('button', { type: 'button', title: `창밖 풍경: ${s.view}`, 'aria-pressed': String(id === store.get('season')), onclick: () => {
+      store.set('season', id);
+      for (const b of seasons.children) b.setAttribute('aria-pressed', String(b.textContent === s.name));
+      if (stage) stage.setSeason(id);
+    } }, s.name)));
+  const stageCol = h('div', { class: 'story__stage' }, frame, h('div', { class: 'shot__cap' }, seasons, chips, h('a', { class: 'btn btn--sm', href: `#item-${feat}`, id: 'hero-open' }, '이 가구 만들기')));
   const toCollection = (e) => { e.preventDefault(); document.getElementById('collection').scrollIntoView({ behavior: 'smooth' }); };
 
   const hero = h('article', { class: 'chapter chapter--hero', dataset: { ch: '0' } }, h('div', { class: 'copy' },
@@ -232,7 +240,7 @@ export function homePage(root, ctx) {
 
   import('../three/stage.js').then(({ Stage, webglSupported }) => {
     if (disposed || !webglSupported()) return;
-    stage = new Stage(host, { maxDpr: ctx.lowPower ? 1.25 : 2, samples: ctx.lowPower ? 40 : 72, daylight: true });
+    stage = new Stage(host, { maxDpr: ctx.lowPower ? 1.25 : 2, samples: ctx.lowPower ? 40 : 72, daylight: true, season: store.get('season') });
     stage.canvas.setAttribute('aria-label', '가구 3D 미리보기. 페이지를 스크롤하면 실물, 분해도, 삼면도, 평면, 완성된 미니어처 순서로 바뀝니다.');
     stage.setTheme({ dark: ctx.isDark() });
     stage.setLineTheme(ctx.isDark() ? 'canvasDark' : 'canvas');

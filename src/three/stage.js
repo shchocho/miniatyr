@@ -5,12 +5,13 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import { MaterialLib, patchShaderChunks, iblDiffuse, withIbl } from './materials.js';
 import { partGeometry, edgeGeometry, draftGeometry } from './meshes.js';
-import { cuttingMatTexture, rulerTexture, MAT_MM } from './textures.js';
+import { cuttingMatTexture, rulerTexture, seasonView, MAT_MM } from './textures.js';
 import { materialKey } from '../data/materials.js';
 import { mergedGroup, decorGroup } from './merge.js';
 import { RealAssets } from './real.js';
 import { itemRoom } from '../data/rooms.js';
 import { styleModel } from '../core/styling.js';
+import { SEASONS } from '../data/seasons.js';
 
 const D2R = Math.PI / 180;
 const FS_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
@@ -72,10 +73,20 @@ const SOFTBOXES = [
   { name: 'rim', size: [3.5, 12], pos: [7, 8, -13], color: '#ffffff', k: 7 },
 ];
 const ROOM_L = 0.057;
-// 창으로 드는 햇빛(daylight 룸): 키 라이트를 따뜻한 해로 바꾸고, 원판을 좁혀 창살 그림자가 또렷하게 남게 한다
 const KEY = { color: 0xfff6ec, k: 3.0, spread: 0.062 };
-const SUN = { color: 0xffe4bf, k: 6.0, spread: 0.014, amb: 0.7, ibl: 0.12 }; // amb·ibl: 그늘을 밝히는 보조광 몫
+// 룸: 키 라이트는 왼쪽 벽 창으로만 드는 빛이 된다. 색·세기·퍼짐은 계절 테마(SEASONS)가 정한다. amb·ibl: 그늘을 밝히는 보조광 몫
+const SUN = { amb: 0.7, ibl: 0.12 };
 const ROOM_DOF = 0.007; // 룸 첫 장의 조리개 반지름(카메라 거리 대비): 가구에 초점, 앞바닥과 뒷벽은 살짝 흐리게
+// 창밖 풍경: 세트장의 배경막처럼 창 뒤 1.5m 에 걸린 5×2.5m 그림을 시선으로 찾아 그린다(카메라가 움직이면 시차가 생기고, 얕은 심도에서는 흐려진다)
+const VIEW_VERT = 'varying vec3 vW; varying vec3 vC; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vC = modelMatrix[3].xyz; gl_Position = projectionMatrix * viewMatrix * w; }';
+const VIEW_FRAG = `
+uniform sampler2D tV; uniform float uK; varying vec3 vW; varying vec3 vC;
+void main(){
+  vec3 d = normalize(vW - cameraPosition);
+  vec3 p = vW + d * (1500.0 / max(0.12, -d.x)) - vC;
+  gl_FragColor = vec4(texture2D(tV, vec2(0.5 + p.z / 5000.0, 0.6 + p.y / 2500.0)).rgb * uK, 1.0);
+}`;
+const mix = (a, b, t) => a + (b - a) * t;
 
 /** 소프트박스 스튜디오를 PMREM 환경맵으로 굽는다(렌더러마다 하나씩 필요). */
 export function studioEnv(renderer) {
@@ -115,7 +126,8 @@ export class Stage {
     this.onFrame = opts.onFrame || null;
     this.interactive = opts.interactive !== false;
     this.sceneKind = opts.scene === 'room' ? 'room' : 'studio'; // 배경: 스튜디오(호리존) | 룸(벽·바닥·소품)
-    this.daylight = !!opts.daylight; // 룸을 왼쪽 벽 창으로만 드는 햇빛과 얕은 심도로 찍는다(홈 첫 장)
+    this.daylight = !!opts.daylight; // 룸을 얕은 심도로 찍는다(홈 첫 장)
+    this.season = SEASONS[opts.season] ? opts.season : 'spring';
     this.roomSink = null;            // 0~1: 벽·소품이 바닥 아래로 내려간 정도. null 이면 분해하는 동안 방을 감춘다(워크벤치)
     this.roomWalls = []; this.styling = null; this.roomPlanes = null; this.roomBase = null; this.roomH = 0; this.sun = null;
 
@@ -371,6 +383,21 @@ export class Stage {
     this.roomSink = n; this.shadowDirty = true; this.invalidate();
   }
 
+  /** 계절 테마: 창밖 풍경, 창으로 드는 빛, 직물 소품의 색을 함께 바꾼다(룸 배경에서 보인다). */
+  setSeason(id) {
+    if (!SEASONS[id] || id === this.season) return;
+    this.season = id;
+    if (this.model) this._layoutSet();
+    this.shadowDirty = true; this.invalidate();
+  }
+
+  /** 지금 방의 빛. 벽이 내려갈수록(roomSink) 봄의 낮빛으로 돌아가 스튜디오 장면으로 이어진다. */
+  _mood() {
+    const a = SEASONS[this.season], b = SEASONS.spring, t = this.roomSink || 0;
+    const col = (k) => new THREE.Color(a[k][0]).multiplyScalar(a[k][1]).lerp(new THREE.Color(b[k][0]).multiplyScalar(b[k][1]), t);
+    return { sun: col('sun'), spread: mix(a.sun[2], b.sun[2], t), sky: col('sky'), skyK: mix(a.sky[1], b.sky[1], t), fill: col('fill'), exposure: mix(a.exposure, b.exposure, t) };
+  }
+
   /** 배경을 바꾼다: 'studio' = 무한 호리존, 'room' = 벽·바닥·소품이 있는 방 한 귀퉁이. */
   setScene(kind) {
     this.sceneKind = kind === 'room' ? 'room' : 'studio';
@@ -549,7 +576,7 @@ export class Stage {
 
   /** 룸 배경: 바닥·벽(그림자를 받기만 함)·방 소품·가구 스타일링 소품. */
   _buildRoom() {
-    const item = this.model.item, spec = itemRoom(item, this.model, { finish: this.finish });
+    const item = this.model.item, S = SEASONS[this.season], spec = itemRoom(item, this.model, { finish: this.finish, palette: S });
     const add = (parts, cast) => { const g = decorGroup(parts, this.lib, this.assets, { detail: 1, cast, onReady: this._redraw }); this.props.add(g); return g; };
     add([spec.floor], false);
     for (const w of spec.walls) {
@@ -557,16 +584,16 @@ export class Stage {
       this.props.add(g);
       g.add(mergedGroup([w.part], this.lib, { detail: 1, cast: false }), decorGroup(w.decor, this.lib, this.assets, { detail: 1, onReady: this._redraw }));
       this.roomWalls.push({ name: w.name, group: g });
-      if (w.name === 'left' && this.daylight && spec.window) this._buildSun(spec, g);
+      if (w.name === 'left' && spec.window) this._buildSun(spec, g);
     }
     this.roomBase = add(spec.base, true);
-    const sp = styleModel(item, this.model, { finish: this.finish });
+    const sp = styleModel(item, this.model, { finish: this.finish, throws: S.accents });
     if (sp.length) this.styling = add(sp, true);
     this.roomPlanes = spec.planes; this.roomH = spec.H;
   }
 
   /**
-   * 창으로만 드는 햇빛: 창 자리만 뚫린 벽과 천장 모양의 보이지 않는 가림막을 왼쪽 벽 그룹에 넣는다(벽과 함께 가라앉는다).
+   * 창으로만 드는 빛과 창밖 풍경: 창 자리만 뚫린 벽과 천장 모양의 보이지 않는 가림막을 왼쪽 벽 그룹에 넣는다(벽과 함께 가라앉는다).
    * 화면에는 그리지 않고 키 라이트의 그림자 지도에만 그린다. 창틀과 창살은 벽 소품이 스스로 그림자를 드리운다.
    */
   _buildSun(spec, group) {
@@ -589,6 +616,10 @@ export class Stage {
       group.add(m);
       if (a[1] === top) this.sunCeil = m;
     }
+    // 창밖 풍경: 단색 하늘 패널 바로 앞(창살보다는 뒤)에 놓는다
+    const view = new THREE.Mesh(new THREE.PlaneGeometry(s.w - 70, s.h - 70), new THREE.ShaderMaterial({ uniforms: { tV: { value: seasonView(this.season) }, uK: { value: SEASONS[this.season].glow } }, vertexShader: VIEW_VERT, fragmentShader: VIEW_FRAG }));
+    view.rotation.y = Math.PI / 2; view.position.set(s.x + 12, s.y, s.z);
+    group.add(view);
     // 해는 창 한가운데를 지나 가구 바로 앞 바닥에 창 모양(창살 십자)을 떨군다. 무늬의 먼 끝이 가구 아래쪽으로 올라탄다.
     // 너무 낮으면 빛 무늬가 길게 늘어지므로 고도를 24° 이상으로 둔다.
     const aim = new THREE.Vector3(this.center.x + (this.bbMax.x - this.bbMin.x) * 0.1, -spec.lift, this.bbMax.z + 400);
@@ -841,12 +872,15 @@ export class Stage {
       L.shadow.normalBias = R * 0.0035;
       L.shadow.needsUpdate = true;
     };
-    const sun = this.sun && this.roomShown ? this.sun : null, K = sun ? SUN : KEY;
-    this.key.color.set(K.color); this.key.intensity = K.k;
+    const sun = this.sun && this.roomShown ? this.sun : null, M = sun && this._mood();
+    if (sun) { this.key.color.copy(M.sun); this.key.intensity = 1; } else { this.key.color.set(KEY.color); this.key.intensity = KEY.k; }
+    this.head.color.set(0xffffff); if (sun) this.head.color.copy(M.fill);
+    this.presentMat.uniforms.uExposure.value = sun ? M.exposure : 1;
+    this.scene.environmentIntensity = ENV_INTENSITY * (sun ? Math.max(0.3, M.skyK) : 1);
     const kd = (sun ? sun.dir : this.keyDir).clone();
     if (jitter) {
       // 키 라이트를 면광원처럼: 원판(보통 지름 약 7°, 햇빛은 약 1.6°) 위에서 표본
-      const a = halton(i, 2) * Math.PI * 2, r = Math.sqrt(halton(i, 3)) * K.spread;
+      const a = halton(i, 2) * Math.PI * 2, r = Math.sqrt(halton(i, 3)) * (sun ? M.spread : KEY.spread);
       const t = new THREE.Vector3(0, 1, 0).cross(kd).normalize(), b = kd.clone().cross(t);
       kd.addScaledVector(t, Math.cos(a) * r).addScaledVector(b, Math.sin(a) * r).normalize();
       // 보조광: 소프트박스(와 방 전체)를 조도 비율대로 골라 그 면 위의 한 점을 표본한다.
@@ -881,15 +915,16 @@ export class Stage {
       if (this.domeSun) fitShadow(this.dome, dd.normalize(), 4, sun.reach, Math.max(R, 600));
       else fitShadow(this.dome, dd.normalize(), this.roomShown ? 2.4 : 1.5);
       this.dome.color.copy(lobe.color);
+      if (sun && lobe.dir !== undefined) this.dome.color.multiply(M.sky);   // 창과 방 전체의 보조광은 계절의 하늘빛을 띤다
       this.dome.intensity = total * (this.domeGain ?? 1) * (sun && !this.domeSun ? SUN.amb : 1);
       this.head.intensity = 0;
-      iblDiffuse.value = keep;
+      iblDiffuse.value = keep * (sun ? M.skyK : 1);
       this.key.shadow.radius = 1.6;
     } else {
       if (this.cutout) fitShadow(this.dome, new THREE.Vector3(0.05, 1, 0.05).normalize(), 1.5);
       this.dome.intensity = 0; this.domeSun = false;
       this.head.intensity = this.headE;
-      iblDiffuse.value = 1;
+      iblDiffuse.value = sun ? M.skyK : 1;
       this.key.shadow.radius = 3.4;
     }
     // 햇빛은 가림막(천장)까지 담고, 화면에 보이는 방 전체를 덮어야 지도 밖이 밝게 새지 않는다
@@ -899,8 +934,8 @@ export class Stage {
 
   _renderScene(target, jitter, i) {
     const r = this.renderer, room = this.roomShown;
-    // 햇빛 드는 방이 온전히 서 있을 때만 렌즈 심도를 준다(분해·벽이 내려가는 중에는 또렷하게)
-    const dof = this.dof || (this.sun && room && this.explode < 0.02 && !(this.roomSink > 0.02) ? ROOM_DOF : 0);
+    // 홈 첫 장: 방이 온전히 서 있을 때만 렌즈 심도를 준다(분해·벽이 내려가는 중에는 또렷하게)
+    const dof = this.dof || (this.daylight && this.sun && room && this.explode < 0.02 && !(this.roomSink > 0.02) ? ROOM_DOF : 0);
     if (jitter) {
       this._viewOffset(halton(i + 1, 2) - 0.5, halton(i + 1, 3) - 0.5);
       if (dof > 0) {

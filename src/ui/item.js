@@ -9,6 +9,7 @@ import { buildSheets, SHEET_STYLES } from '../core/sheets.js';
 import { modelSVG } from '../core/project.js';
 import { materialOf, MATERIALS } from '../data/materials.js';
 import * as EX from '../core/export.js';
+import { SEASONS } from '../data/seasons.js';
 
 const TABS = [['over', '개요'], ['draw', '도면'], ['cut', '재단'], ['asm', '조립'], ['out', '내보내기']];
 const VIEW_ORDER = ['iso', 'front', 'side', 'top'];
@@ -49,7 +50,14 @@ export function itemPage(root, id, ctx) {
     h('button', { type: 'button', 'aria-pressed': 'true', onclick: () => setMini(false) }, '실물'),
     h('button', { type: 'button', 'aria-pressed': 'false', onclick: () => setMini(true) }, '미니어처'));
   const tb = (name, label, on, pressed) => h('button', { type: 'button', class: 'btn btn--sm btn--icon', title: label, 'aria-label': label, 'aria-pressed': pressed == null ? null : String(pressed), onclick: on, html: icon(name) });
-  const bRoom = tb('home', '룸 배경(방에 놓고 보기)', () => { roomPref = !roomPref; bRoom.setAttribute('aria-pressed', String(roomPref)); if (stage) stage.setScene(roomPref ? 'room' : 'studio'); toast(roomPref ? '룸 배경: 방에 놓인 모습으로 봅니다' : '스튜디오 배경', 1400); }, roomPref);
+  const bRoom = tb('home', '룸 배경(방에 놓고 보기)', () => { roomPref = !roomPref; bRoom.setAttribute('aria-pressed', String(roomPref)); bSeason.hidden = !roomPref; if (stage) stage.setScene(roomPref ? 'room' : 'studio'); toast(roomPref ? '룸 배경: 방에 놓인 모습으로 봅니다' : '스튜디오 배경', 1400); }, roomPref);
+  // 계절 테마(홈과 같은 값을 쓴다): 룸 배경이 켜져 있을 때만 보인다
+  const bSeason = tb('leaf', '계절 테마 바꾸기', () => {
+    const ids = Object.keys(SEASONS), next = ids[(ids.indexOf(store.get('season')) + 1) % ids.length];
+    store.set('season', next); if (stage) stage.setSeason(next);
+    toast(`${SEASONS[next].name}: 창밖은 ${SEASONS[next].view}`, 1400);
+  });
+  bSeason.hidden = !roomPref;
   const bDims = tb('dims', '치수 표시', () => { S.dims = !S.dims; bDims.setAttribute('aria-pressed', String(S.dims)); stage && stage.setDims(S.dims); }, false);
   const bOpt = tb('pillow', '침구·소품 표시', () => { S.opt = !S.opt; bOpt.setAttribute('aria-pressed', String(S.opt)); stage && stage.setShowOptional(S.opt); }, true);
   const bLamp = tb('bulb', '조명 켜기', () => { S.lamp = !S.lamp; bLamp.setAttribute('aria-pressed', String(S.lamp)); stage && stage.setLamp(S.lamp); }, true);
@@ -58,7 +66,7 @@ export function itemPage(root, id, ctx) {
   const rExplode = h('input', { class: 'range', type: 'range', id: 'r-explode', min: '0', max: '100', value: '0', 'aria-label': '분해 정도', oninput: (e) => { S.explode = e.target.value / 100; e.target.style.setProperty('--p', `${e.target.value}%`); stage && stage.setExplode(S.explode); } });
   const rSplit = h('input', { class: 'range', type: 'range', id: 'r-split', min: '0', max: '100', value: '0', 'aria-label': '도면선으로 보는 영역', oninput: (e) => { S.split = e.target.value / 100; e.target.style.setProperty('--p', `${e.target.value}%`); stage && stage.setSplit(S.split); } });
   const toolsTL = h('div', { class: 'viewer__tools viewer__tools--tl' }, modeSeg);
-  const toolsTR = h('div', { class: 'viewer__tools viewer__tools--tr' }, bRoom, bDims, bOpt, bLamp, bView, bFull);
+  const toolsTR = h('div', { class: 'viewer__tools viewer__tools--tr' }, bRoom, bSeason, bDims, bOpt, bLamp, bView, bFull);
   const toolsB = h('div', { class: 'viewer__tools viewer__tools--b' }, h('label', {}, '분해', rExplode), h('label', {}, '도면선', rSplit));
   const viewer = h('div', { class: 'viewer hudframe' }, stageHost, sheetView, tip, hint, toolsTL, toolsTR, toolsB,
     h('div', { class: 'hud hud--bl hud--up' }, hud.az), h('div', { class: 'hud hud--br hud--up' }, hud.info));
@@ -118,7 +126,7 @@ export function itemPage(root, id, ctx) {
   }
   function setN(n) { S.N = n; store.set('N', n); for (const b of scaleSeg.children) b.setAttribute('aria-pressed', String(b.textContent === `1:${n}`)); rebuild(true); }
   function setFin(i) { S.fin = i; store.setItem(id, { fin: i }); [...swatches.children].forEach((b, k) => b.setAttribute('aria-pressed', String(k === i))); if (stage) stage.setFinish(item.finishes[i]); else fallback(); sheets = null; if (S.tab === 'draw') renderTab(); }
-  function setMini(on) { S.mini = on; bRoom.hidden = on; modeSeg.children[0].setAttribute('aria-pressed', String(!on)); modeSeg.children[1].setAttribute('aria-pressed', String(on)); if (stage) { stage.setMini(on, S.N); stage.fit(); } if (on) toast('커팅 매트 눈금은 1cm, 옆의 자는 15cm, 동전은 500원(지름 26.5mm)입니다.', 3600); }
+  function setMini(on) { S.mini = on; bRoom.hidden = on; bSeason.hidden = on || !roomPref; modeSeg.children[0].setAttribute('aria-pressed', String(!on)); modeSeg.children[1].setAttribute('aria-pressed', String(on)); if (stage) { stage.setMini(on, S.N); stage.fit(); } if (on) toast('커팅 매트 눈금은 1cm, 옆의 자는 15cm, 동전은 500원(지름 26.5mm)입니다.', 3600); }
   function setTab(k) {
     stopPlay();
     S.tab = k;
@@ -316,7 +324,7 @@ export function itemPage(root, id, ctx) {
     if (disposed || !webglSupported()) return;
     stageHost.innerHTML = ''; stageHost.dataset.gl = '1';
     stage = new Stage(stageHost, {
-      maxDpr: ctx.lowPower ? 1.25 : 2, samples: ctx.lowPower ? 40 : 80, scene: roomPref ? 'room' : 'studio',
+      maxDpr: ctx.lowPower ? 1.25 : 2, samples: ctx.lowPower ? 40 : 80, scene: roomPref ? 'room' : 'studio', season: store.get('season'),
       onHover: (p, e) => {
         if (!p) { tip.hidden = true; return; }
         const r = list.byId.get(p.id), vr = viewer.getBoundingClientRect();

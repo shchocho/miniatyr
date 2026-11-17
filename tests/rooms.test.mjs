@@ -7,7 +7,8 @@ import { buildModel, Kit } from '../src/core/kit.js';
 import { orientedMesh } from '../src/core/geom.js';
 import { cutList } from '../src/core/cutlist.js';
 import { styleModel, styleKind, findBays } from '../src/core/styling.js';
-import { layoutShowroom, checkLayout, modelOf } from '../src/data/rooms.js';
+import { layoutShowroom, checkLayout, modelOf, itemRoom } from '../src/data/rooms.js';
+import { SEASONS } from '../src/data/seasons.js';
 import * as PR from '../src/builders/props.js';
 
 const finite = (p) => { for (const d of [0, 1]) { const m = orientedMesh(p, d); for (const v of m.v) if (!v.every(Number.isFinite)) return false; if (!m.f.length) return false; } return true; };
@@ -93,4 +94,15 @@ test('소품 부품: 모든 소품이 유효한 메시를 만든다', () => {
   // 같은 시드는 같은 결과
   const a = PR.rng(5), b = PR.rng(5);
   for (let i = 0; i < 20; i++) assert.equal(a(), b());
+});
+
+test('계절 테마: 색 이름이 재질표에 있고, 테마를 바꿔도 방의 구성은 그대로다', () => {
+  const it = CATALOG.find((x) => x.id === 'klippan'), model = modelOf(it), base = itemRoom(it, model);
+  for (const [id, s] of Object.entries(SEASONS)) {
+    for (const k of [...s.accents, ...s.curtains, ...s.rugs]) assert.ok(MATERIALS[k], `${id}: ${k}`);
+    const r = itemRoom(it, model, { palette: s }), curtains = r.walls[1].decor.filter((p) => p.name === '커튼');
+    assert.equal(r.base.length, base.base.length, `${id}: 바닥 소품 수`);
+    assert.deepEqual(r.window, base.window, `${id}: 창 위치`);
+    assert.ok(curtains.length === 2 && curtains.every((p) => s.curtains.includes(p.mat)), `${id}: 커튼 색`);
+  }
 });

@@ -453,8 +453,9 @@ const FLOORS = ['floor-oak', 'floor-light', 'floor-parquet', 'floor-oak', 'floor
  * 가구 하나를 놓고 찍는 방 한 귀퉁이(뒷벽 + 왼쪽 벽). 모델 좌표계의 부품을 돌려준다.
  * { floor, walls: [{ name, part, decor }], base, planes: { xl, zb }, lift }
  * 탁상 조명처럼 작은 것은 콘솔 위에, 벽선반·페그보드는 벽에 걸린 높이로 방을 내려 맞춘다(lift).
+ * palette({ accents, curtains, rugs })를 주면 직물 소품의 색을 그 안에서 고른다(계절 테마).
  */
-export function itemRoom(item, model, { finish = null, seed = 0 } = {}) {
+export function itemRoom(item, model, { finish = null, seed = 0, palette = {} } = {}) {
   const bb = model.bbox, rule = ROOM_RULE[item.id] || {}, gap = rule.gap ?? GAP_BY_CAT[item.cat] ?? 300, lift = rule.lift || 0;
   const w0 = bb.max[0] - bb.min[0], d0 = bb.max[2] - bb.min[2], h0 = bb.max[1], cx0 = (bb.min[0] + bb.max[0]) / 2;
   const R = PR.rng(PR.hashStr(item.id) * 7 + seed * 131 + 5), fin = finish || item.finishes[0];
@@ -467,10 +468,10 @@ export function itemRoom(item, model, { finish = null, seed = 0 } = {}) {
   const r = new Room({ id: `item-${item.id}`, name: item.name, w: W, d: D, H, floor: floorMat, walls: { back: wallBack, left: 'wall-white', right: 'wall-white' } });
   const X = (x) => x - xl, Z = (z) => z - zb, ix0 = X(bb.min[0]), ix1 = X(bb.max[0]), iz0 = Z(bb.min[2]), iz1 = Z(bb.max[2]), icx = X(cx0);
   const kind = item.cat, tall = h0 + lift >= 1300, soft = kind === 'sofa' || kind === 'bed';
-  const frames = pick(R, ['black', 'oak', 'white', 'brass']), rugA = pick(R, ['fab-natural', 'fab-cream', 'jute', 'fab-gray']), accent = pick(R, PR.ACCENTS);
+  const frames = pick(R, ['black', 'oak', 'white', 'brass']), rugA = pick(R, palette.rugs || ['fab-natural', 'fab-cream', 'jute', 'fab-gray']), accent = pick(R, palette.accents || PR.ACCENTS);
   // 창과 커튼: 왼쪽 벽
   const win = { c: Math.max(1500, iz1 + 700), w: 1300, h: 1400, sill: 850 };
-  r.window('left', win.c, { w: win.w, h: win.h, sill: win.sill, curtain: pick(R, ['linen', 'linen', 'fab-cream', 'fab-blush']) });
+  r.window('left', win.c, { w: win.w, h: win.h, sill: win.sill, curtain: pick(R, palette.curtains || ['linen', 'linen', 'fab-cream', 'fab-blush']) });
   // 왼쪽 구석의 큰 화분
   r.plant(ix0 - Lw * 0.52, Math.max(380, iz0 + 300), pick(R, ['rubber', 'monstera', 'snake', 'rubber']), 1 + R() * 0.1, pick(R, ['terracotta', 'ceramic', 'basket', 'ceramic-black']));
   // 벽 그림: 낮은 가구는 위에, 키 큰 가구는 오른쪽 벽면에

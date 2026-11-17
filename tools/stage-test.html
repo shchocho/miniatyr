@@ -10,7 +10,7 @@ const it = getItem(q.get('id') || 'billy');
 const N = Number(q.get('n') || 12);
 const model = buildModel(it, { N, variant: q.get('v') || undefined });
 const fin = it.finishes[Number(q.get('f') || 0)];
-const stage = new Stage(document.getElementById('host'), { cutout: q.has('cutout'), maxDpr: Number(q.get('dpr') || 1), interactive: true, scene: q.has('room') ? 'room' : 'studio' });
+const stage = new Stage(document.getElementById('host'), { cutout: q.has('cutout'), maxDpr: Number(q.get('dpr') || 1), interactive: true, scene: q.has('room') ? 'room' : 'studio', season: q.get('season'), daylight: q.has('daylight') });
 stage.setTheme({ dark: q.has('dark') });
 if (q.has('mini')) { stage.mini = true; stage.N = N; }
 stage.setModel(model, fin);
@@ -21,9 +21,6 @@ if (q.has('line')) stage.setStyle('line');
 if (q.has('dims')) stage.setDims(true);
 if (q.has('view')) stage.setView(q.get('view'), false);
 if (q.has('gain')) stage.domeGain = Number(q.get('gain'));
-if (q.has('key')) stage.key.intensity = Number(q.get('key'));
-if (q.has('env')) stage.scene.environmentIntensity = Number(q.get('env'));
-if (q.has('exp')) stage.presentMat.uniforms.uExposure.value = Number(q.get('exp'));
 if (q.has('yaw')) { stage.goal.theta = Number(q.get('yaw')) * Math.PI / 180; stage.goal.phi = Number(q.get('pitch') || 66) * Math.PI / 180; stage.fit(true, true); }
 if (q.has('ibl')) stage.iblAccum = Number(q.get('ibl'));
 window.stage = stage;

@@ -349,3 +349,78 @@ export function radialAlpha() {
   ctx.fillStyle = g; ctx.fillRect(0, 0, N, N);
   return tex(cv, { repeat: false });
 }
+
+// ---------------------------------------------------------------- 창밖 풍경(계절 테마)
+const viewCache = new Map();
+/**
+ * 계절별 창밖 풍경 한 장(봄 벚꽃·여름밤 은하수·가을 단풍·겨울 눈). 세트장의 창밖 배경막처럼 창 뒤에 걸어 쓴다.
+ * 가로로 거울 반복한다. 지평선은 위에서 62% 높이.
+ */
+export function seasonView(id) {
+  if (viewCache.has(id)) return viewCache.get(id);
+  const W = 2048, H = 1024, cv = canvas(W, H), c = cv.getContext('2d'), { rnd, fbm } = makeNoise(41), hz = H * 0.62;
+  const rgba = (col, a) => `rgba(${hex(col).join(',')},${a})`;
+  const fall = (stops, y0, y1) => { const g = c.createLinearGradient(0, y0, 0, y1); stops.forEach((s, i) => g.addColorStop(i / (stops.length - 1), s)); c.fillStyle = g; c.fillRect(0, y0, W, y1 - y0); };
+  const blob = (x, y, r, col, a = 1) => { const g = c.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, rgba(col, a)); g.addColorStop(1, rgba(col, 0)); c.fillStyle = g; c.fillRect(x - r, y - r, r * 2, r * 2); };
+  // 능선: 잡음으로 흔들리는 윤곽 아래를 채운다
+  const ridge = (y, amp, f, col) => { c.fillStyle = col; c.beginPath(); c.moveTo(0, H); for (let x = 0; x <= W; x += 6) c.lineTo(x, y - amp * fbm(x * f, y * 0.013, 4)); c.lineTo(W, H); c.fill(); };
+  // 나무 무리: 줄기 위에 색 방울을 겹쳐 쌓은 수관
+  const grove = (n, y, s, cols, trunk) => {
+    for (let i = 0; i < n; i++) {
+      const x = rnd() * W, r = s * (0.7 + rnd() * 0.6), ty = y + (rnd() - 0.5) * s * 0.4;
+      c.fillStyle = trunk; c.fillRect(x - r * 0.04, ty - r * 0.7, r * 0.08, r * 0.74);
+      for (let j = 0; j < 40; j++) { const a = rnd() * 6.283, d = Math.sqrt(rnd()) * r; blob(x + Math.cos(a) * d, ty - r * 1.02 + Math.sin(a) * d * 0.72, r * (0.14 + rnd() * 0.2), cols[Math.floor(rnd() * cols.length)], 0.45 + rnd() * 0.45); }
+    }
+  };
+  const haze = (col, a) => fall([rgba(col, 0), rgba(col, a), rgba(col, 0)], hz - 190, hz + 130);
+  // 은하수의 중심선: 왼쪽 아래에서 오른쪽 위로 비스듬히 지나간다
+  const band = (t, o) => [W * t + o * 0.35, hz * (0.78 - 0.62 * t) + o];
+  if (id === 'summer') {
+    fall(['#02040b', '#060a19', '#0e1630', '#1c2442'], 0, hz + 40);
+    for (let i = 0; i < 620; i++) { const o = (rnd() + rnd() + rnd() - 1.5) * 150, [x, y] = band(rnd(), o); blob(x, y, 40 + rnd() * 90, i % 5 ? '#8fa6e8' : i % 2 ? '#e8b48c' : '#c9a3e0', 0.04 + 0.07 * (1 - Math.abs(o) / 230)); }
+    for (let i = 0; i < 70; i++) { const [x, y] = band(rnd(), (rnd() - 0.5) * 46 + 14); blob(x, y, 24 + rnd() * 40, '#03050d', 0.22); }   // 암흑대
+    for (let i = 0; i < 5600; i++) {
+      const m = Math.pow(rnd(), 4), s = m > 0.8 ? 2.6 : m > 0.35 ? 1.8 : 1.2;
+      const [x, y] = i % 3 ? [rnd() * W, rnd() * hz * 1.05] : band(rnd(), (rnd() + rnd() - 1) * 210);
+      c.fillStyle = rgba(['#ffffff', '#cfe0ff', '#ffe9cf'][i % 3], 0.3 + 0.7 * m); c.fillRect(x, y, s, s);
+      if (m > 0.92) blob(x, y, 10, '#dfe9ff', 0.5);
+    }
+    haze('#33426f', 0.5);
+    ridge(hz + 6, 120, 0.003, '#080d19'); ridge(hz + 74, 64, 0.009, '#04060b');
+  } else if (id === 'winter') {
+    fall(['#aebccd', '#d5dee8', '#f1f4f7'], 0, hz);
+    ridge(hz - 24, 120, 0.003, '#dbe3ec'); ridge(hz + 4, 46, 0.02, '#7d909c'); ridge(hz + 30, 60, 0.006, '#eef2f6');   // 먼 설산, 숲 띠, 눈밭
+    fall(['#eef2f6', '#fafbfc'], hz + 60, H);
+    for (let i = 0; i < 46; i++) blob(rnd() * W, hz + 90 + rnd() * (H - hz - 90), 60 + rnd() * 120, '#bfcde2', 0.3);                       // 눈밭의 푸른 그늘
+    // 눈 덮인 전나무: 어두운 층 위에 흰 눈을 얹는다(먼 것부터)
+    const firs = Array.from({ length: 64 }, () => [rnd() * W, hz + 16 + rnd() * 170]).sort((a, b) => a[1] - b[1]);
+    for (const [x, y] of firs) {
+      const hh = (y - hz) * 0.9 + 80;
+      for (let t = 0; t < 5; t++) {
+        const w = hh * (0.09 + 0.065 * t), ty = y - hh + hh * 0.19 * t, tri = (k, d, col) => { c.fillStyle = col; c.beginPath(); c.moveTo(x, ty); c.lineTo(x - w * k, ty + hh * d); c.lineTo(x + w * k, ty + hh * d); c.fill(); };
+        tri(1, 0.3, '#263d35'); tri(0.62, 0.15, '#f3f6fa');
+      }
+    }
+    haze('#e9eef4', 0.5);
+    for (let i = 0; i < 900; i++) blob(rnd() * W, rnd() * H, 2 + rnd() * 5, '#ffffff', 0.5 + rnd() * 0.4);                                     // 내리는 눈
+  } else if (id === 'autumn') {
+    fall(['#e2bb83', '#f3d9ad', '#fcefd9'], 0, hz);
+    blob(W * 0.22, hz - 70, 640, '#fff4d2', 0.85);                                                                                           // 낮게 걸린 해
+    ridge(hz - 14, 130, 0.003, '#cfa67c'); ridge(hz + 44, 70, 0.006, '#a9713f');
+    fall(['#a9713f', '#c38c48'], hz + 90, H);
+    haze('#f6dcae', 0.5);
+    grove(84, hz + 104, 80, ['#c8502a', '#e08a2c', '#edb83a', '#a23a22', '#d9a441', '#7d8a3a'], '#3a2a20');
+    for (let i = 0; i < 1400; i++) { c.fillStyle = rgba(['#c8502a', '#e08a2c', '#edb83a'][i % 3], 0.6); c.fillRect(rnd() * W, hz + 110 + rnd() * (H - hz - 110), 5, 3); }  // 낙엽
+  } else {
+    fall(['#86b4e6', '#bfdbf4', '#edf5fb'], 0, hz);
+    blob(W * 0.7, hz - 120, 560, '#fff8e6', 0.6);
+    ridge(hz - 20, 110, 0.003, '#a9c6a6'); ridge(hz + 40, 60, 0.006, '#86ad73');
+    fall(['#86ad73', '#a9cc7c'], hz + 90, H);
+    haze('#eef5f2', 0.45);
+    grove(76, hz + 100, 78, ['#f6c9d6', '#fbe3ea', '#f3b3c6', '#ffffff', '#f9d6df'], '#4a3830');
+    for (let i = 0; i < 700; i++) { c.fillStyle = rgba('#fbe3ea', 0.7); c.fillRect(rnd() * W, rnd() * H, 4, 3); }                             // 흩날리는 꽃잎
+  }
+  const t = tex(cv, { srgb: true, mirror: true });
+  viewCache.set(id, t);
+  return t;
+}

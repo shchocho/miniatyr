@@ -48,6 +48,7 @@ const P = {
   pillow: '<path d="M4 8.5c2.5-2 13.500-2 16 0 1 2.300 1 4.700 0 7-2.500 2-13.500 2-16 0-1-2.300-1-4.700 0-7Z"/>',
   camera: '<path d="M4 8h3l1.500-2.500h7L17 8h3v11H4Z"/><circle cx="12" cy="13.300" r="3.300"/>',
   x: '<path d="m6 6 12 12M18 6 6 18"/>',
+  leaf: '<path d="M5 19c0-8.500 5-13.500 14-14 0 9-5 14-14 14Zm0 0 8-8"/>',
 };
 export function icon(name, cls) {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"${cls ? ` class="${cls}"` : ''}>${P[name] || ''}</svg>`;
@@ -65,7 +66,7 @@ export function toast(msg, ms = 2600) {
 
 // ---------------------------------------------------------------- 저장소 (브라우저에만 남는 개인 설정·진행 기록)
 const KEY = 'miniatyr.v1';
-const DEF = { N: 12, fit: false, theme: 'system', sheetStyle: 'paper', mmpx: 96 / 25.4, items: {} };
+const DEF = { N: 12, fit: false, theme: 'system', sheetStyle: 'paper', season: 'spring', mmpx: 96 / 25.4, items: {} };
 /** 저장된 값·가져온 백업은 믿지 않는다: 아는 필드만, 아는 형태로만 받아들인다. */
 function sanitize(raw) {
   const o = raw && typeof raw === 'object' ? raw : {}, out = { ...DEF, items: {} };
@@ -73,6 +74,7 @@ function sanitize(raw) {
   out.fit = o.fit === true;
   if (['system', 'light', 'dark'].includes(o.theme)) out.theme = o.theme;
   if (['paper', 'blueprint', 'night'].includes(o.sheetStyle)) out.sheetStyle = o.sheetStyle;
+  if (['spring', 'summer', 'autumn', 'winter'].includes(o.season)) out.season = o.season;
   if (Number.isFinite(o.mmpx) && o.mmpx >= 2.4 && o.mmpx <= 6.5) out.mmpx = o.mmpx;
   if (o.items && typeof o.items === 'object') {
     for (const [id, v] of Object.entries(o.items).slice(0, 400)) {
