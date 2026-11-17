@@ -1,4 +1,5 @@
 // dom.js — DOM 헬퍼, 아이콘, 토스트, 3D 틸트, 저장소, 파일 저장.
+import { DEFAULT_PRINTER, printerId, layerMode } from '../data/printers.js';
 
 export function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
@@ -68,7 +69,8 @@ export function toast(msg, ms = 2600) {
 
 // ---------------------------------------------------------------- 저장소 (브라우저에만 남는 개인 설정·진행 기록)
 const KEY = 'miniatyr.v1';
-const DEF = { N: 12, fit: false, theme: 'system', sheetStyle: 'paper', season: 'spring', mmpx: 96 / 25.4, items: {} };
+// printer · printLayer: 3D 출력 기준 프린터와 층 모드(src/data/printers.js)
+const DEF = { N: 12, fit: false, theme: 'system', sheetStyle: 'paper', season: 'spring', mmpx: 96 / 25.4, printer: DEFAULT_PRINTER, printLayer: 'fine', items: {} };
 /** 저장된 값·가져온 백업은 믿지 않는다: 아는 필드만, 아는 형태로만 받아들인다. */
 function sanitize(raw) {
   const o = raw && typeof raw === 'object' ? raw : {}, out = { ...DEF, items: {} };
@@ -78,6 +80,8 @@ function sanitize(raw) {
   if (['paper', 'blueprint', 'night'].includes(o.sheetStyle)) out.sheetStyle = o.sheetStyle;
   if (['spring', 'summer', 'autumn', 'winter'].includes(o.season)) out.season = o.season;
   if (Number.isFinite(o.mmpx) && o.mmpx >= 2.4 && o.mmpx <= 6.5) out.mmpx = o.mmpx;
+  out.printer = printerId(o.printer);
+  out.printLayer = layerMode(o.printLayer);
   if (o.items && typeof o.items === 'object') {
     for (const [id, v] of Object.entries(o.items).slice(0, 400)) {
       if (!/^[a-z0-9-]{1,40}$/.test(id) || !v || typeof v !== 'object') continue;
