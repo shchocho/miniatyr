@@ -438,9 +438,13 @@ table.t { width: 100%; min-width: 500px; border-collapse: collapse; font-size: v
 /* ───────── 스토리: 고정된 3D 장면 위로 장(chapter)이 한 화면씩 지나간다.
    문구는 바탕색 패널에 담는다. 실사 장면 위에서는 카드가 되고, 종이 바탕의 도면 장에서는 바탕에 녹는다. */
 .story { display: grid; grid-template-columns: minmax(0, 1fr); position: relative; }
-.story__stage { grid-column: 1; grid-row: 1; position: sticky; top: calc(var(--head) + 1px + env(safe-area-inset-top, 0px)); height: calc(100vh - var(--head) - 1px); height: calc(100svh - var(--head) - 1px); z-index: 0; align-self: start; }
+.story__stage, .story__ui { grid-column: 1; grid-row: 1; position: sticky; top: calc(var(--head) + 1px + env(safe-area-inset-top, 0px)); height: calc(100vh - var(--head) - 1px); height: calc(100svh - var(--head) - 1px); align-self: start; }
+.story__stage { z-index: 0; }
 .story__stage .shot__frame { position: absolute; inset: 0; aspect-ratio: auto; border-radius: 0; border: 0; }
-.story__stage .shot__cap { position: absolute; right: var(--gut-r); bottom: var(--s5); z-index: 4; margin: 0; justify-content: flex-end; max-width: calc(100% - 32px); }
+/* 고르기 막대 층: 장면과 같이 고정되고 문구(z 2)보다 위에 선다. 문구는 헤더 밑처럼 막대 밑으로 지나가므로
+   막대는 문구 카드와 같은 바탕색 패널에 담아 그 사이로 글자가 비치지 않게 한다. 층의 나머지는 누름을 아래로 보낸다. */
+.story__ui { z-index: 3; pointer-events: none; }
+.story__ui .shot__cap { position: absolute; right: var(--gut-r); bottom: var(--s5); margin: 0; padding: var(--s2); border-radius: var(--r3); background: var(--bg); justify-content: flex-end; max-width: calc(100% - 32px); pointer-events: auto; }
 .story__text { grid-column: 1; grid-row: 1; position: relative; z-index: 2; pointer-events: none; width: 100%; }
 .chapter { display: flex; align-items: center; min-height: calc(100vh - var(--head) - 1px); min-height: calc(100svh - var(--head) - 1px); }
 .chapter--right { justify-content: flex-end; }
@@ -465,11 +469,11 @@ table.t { width: 100%; min-width: 500px; border-collapse: collapse; font-size: v
   .chapter--right { justify-content: flex-start; }
   .copy { width: 100%; }
   .chapter--hero .hero__facts, .copy > .scrollcue { display: none; }
-  .story__stage .shot__cap { top: 12px; bottom: auto; left: var(--gut); justify-content: space-between; }
-  .story__stage .shot__cap .seg { flex: 1 1 0; min-width: 0; }
+  .story__ui .shot__cap { top: 12px; bottom: auto; left: var(--gut); justify-content: space-between; }
+  .story__ui .shot__cap .seg { flex: 1 1 0; min-width: 0; }
   /* 계절 테마는 윗줄을 다 쓰고, 가구 고르기와 버튼이 아랫줄에 선다 */
-  .story__stage .shot__cap .seg:first-child { flex-basis: 100%; }
-  .story__stage .shot__cap .seg:first-child button { flex: 1 1 0; }
+  .story__ui .shot__cap .seg:first-child { flex-basis: 100%; }
+  .story__ui .shot__cap .seg:first-child button { flex: 1 1 0; }
 }
 @media (max-width: 760px) {
   .chapter { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }   /* 하단 탭 위로 */

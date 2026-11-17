@@ -49,7 +49,9 @@ export function homePage(root, ctx) {
       for (const b of seasons.children) b.setAttribute('aria-pressed', String(b.textContent === s.name));
       if (stage) stage.setSeason(id);
     } }, s.name)));
-  const stageCol = h('div', { class: 'story__stage' }, frame, h('div', { class: 'shot__cap' }, seasons, chips, h('a', { class: 'btn btn--sm', href: `#item-${feat}`, id: 'hero-open' }, '이 가구 만들기')));
+  const stageCol = h('div', { class: 'story__stage' }, frame);
+  // 고르기 막대는 장면과 같은 자리에 고정하되 문구보다 위 층에 둔다(장면 층 안에 두면 지나가는 문구 카드에 가려 누를 수 없다)
+  const stageUI = h('div', { class: 'story__ui' }, h('div', { class: 'shot__cap' }, seasons, chips, h('a', { class: 'btn btn--sm', href: `#item-${feat}`, id: 'hero-open' }, '이 가구 만들기')));
   const toCollection = (e) => { e.preventDefault(); document.getElementById('collection').scrollIntoView({ behavior: 'smooth' }); };
 
   const hero = h('article', { class: 'chapter chapter--hero', dataset: { ch: '0' } }, h('div', { class: 'copy' },
@@ -76,7 +78,7 @@ export function homePage(root, ctx) {
     h('p', { class: 'overline' }, `${c.n} — ${c.k}`), h('h2', {}, c.t), h('p', {}, c.d),
     i === 3 ? viewSeg : null,
     i === 3 ? h('div', { class: 'hero__cta' }, h('a', { class: 'btn btn--mat', href: '#collection', onclick: (e) => { e.preventDefault(); setView('room'); document.getElementById('collection').scrollIntoView({ behavior: 'smooth' }); } }, '3D 쇼룸 둘러보기'), h('a', { class: 'btn', href: '#collection', onclick: toCollection }, '목록으로 고르기')) : null)))];
-  const story = h('section', { class: 'story', 'aria-label': '실물에서 도면, 미니어처까지' }, stageCol, h('div', { class: 'story__text wrap' }, chapEls));
+  const story = h('section', { class: 'story', 'aria-label': '실물에서 도면, 미니어처까지' }, stageCol, stageUI, h('div', { class: 'story__text wrap' }, chapEls));
 
   // ───── 컬렉션
   const f = { cat: 'all', q: '', sort: 'no', view: 'grid' };
