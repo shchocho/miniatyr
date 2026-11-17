@@ -51,6 +51,11 @@
 | `.t` 표 | | 행 hover · `is-on`(옅은 강조) | `scope="col"`, 행은 키보드로 선택 |
 | `.step` 조립 단계 | `is-done` `is-cur` | `aria-current="step"` | 완료 버튼 `aria-pressed` |
 | `.toast` · `.pal` 검색 | | | `role="status"` / `role="dialog"`, 그림자는 여기에만 |
+| `.pagehead` 페이지 머리 | `--split`(오른쪽에 도구) | | 홈 밖의 화면마다 h1 하나 + 설명 한 줄 |
+| `.t--pick` 고르는 표 | | 손가락 커서·hover 는 이 표에만 | 읽기만 하는 표(`.t`)는 누를 수 있어 보이지 않게 |
+| `.terms` 용어 목록 | | | `dl`. 같은 모양 카드를 늘어놓는 대신 쓴다 |
+| `.empty-state` 빈 상태 | | | 무엇이 비었는지 + 다음 행동 버튼 하나 |
+| `.fineprint` 작은 안내 | | | 흐린 글자 12px. 표·도구 아래 보충 설명 |
 
 ## 홈의 스크롤 연출
 

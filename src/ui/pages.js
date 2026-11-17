@@ -10,18 +10,21 @@ import { modelSVG, VIEWS } from '../core/project.js';
 const GUIDE = [
   ['scale', '축척 고르기', () => [
     h('p', {}, '축척은 "실물의 몇 분의 1로 줄이는가"입니다. 1:12는 실물 12cm가 미니어처 1cm가 된다는 뜻입니다. 처음이라면 재료와 소품을 구하기 쉬운 1:12를 권합니다.'),
-    h('div', { class: 'cards2' }, SCALES.map((s) => h('div', { class: 'mini' }, h('span', { class: 'mono' }, s.label), h('b', {}, s.name), h('p', {}, s.note), h('p', { class: 'mono', style: { fontSize: 'var(--t-xs)', color: 'var(--ink-3)' } }, `책장 202cm → ${fmt(2020 / s.n, 1)}mm`)))),
+    // 다섯 축척을 나란히 견주는 내용이라 같은 모양 카드보다 표가 읽기 쉽다
+    h('div', { class: 'tablewrap' }, h('table', { class: 't' },
+      h('thead', {}, h('tr', {}, ['축척', '이름', '특징', '202cm 책장의 크기'].map((x, i) => h('th', { scope: 'col', class: i === 3 ? 'num' : null }, x)))),
+      h('tbody', {}, SCALES.map((s) => h('tr', {}, h('td', { class: 'mono' }, s.label), h('td', {}, s.name), h('td', {}, s.note), h('td', { class: 'num' }, `${fmt(2020 / s.n, 1)}mm`)))))),
     h('p', {}, '축척이 작아질수록 판재가 종이처럼 얇아집니다. 워크벤치의 "시판 재료 두께에 맞추기"를 켜면 0.5·1·1.5·2·3mm처럼 실제로 살 수 있는 두께로 도면 전체가 다시 계산됩니다.'),
   ]],
   ['material', '재료', () => [
-    h('div', { class: 'cards2' }, [
+    h('dl', { class: 'terms' }, [
       ['판재', '발사·바스우드 1~3mm가 기본입니다. 흰 가구는 하드보드지나 폼보드에 흰 종이를 붙여도 깔끔합니다.'],
       ['각재·환봉', '다리와 프레임에 씁니다. 가는 것은 이쑤시개·대나무 꼬치·성냥개비로 대신할 수 있습니다.'],
       ['철사·황동봉', '파이프 의자, 행거, 손잡이에 씁니다. 1~2mm 알루미늄 선이 구부리기 쉽습니다.'],
       ['투명판', '유리는 0.5~1mm PET판이나 아크릴로 만듭니다. 포장 케이스를 오려 써도 됩니다.'],
       ['원단·스펀지', '소파와 쿠션용. 얇고 올이 고운 면·린넨이 축척에 맞아 보입니다.'],
       ['종이', '조명 갓은 트레이싱지, 수납통은 색지로 접습니다. 전개도 시트를 그대로 인쇄해 씁니다.'],
-    ].map(([t, d]) => h('div', { class: 'mini' }, h('b', {}, t), h('p', {}, d)))),
+    ].map(([t, d]) => [h('dt', {}, t), h('dd', {}, d)])),
   ]],
   ['tools', '도구', () => [
     h('ul', { class: 'checks' }, ['커팅 매트와 쇠자 — 눈금이 있는 매트면 직각 맞추기가 쉽습니다', '아트 나이프(30° 칼날) — 날은 자주 갈아 끼웁니다', '목공 본드와 순간접착제 — 나무는 본드, 금속·플라스틱은 순간접착제', '사포 400·800방 — 납작한 막대에 붙여 쓰면 면이 평평하게 갈립니다', '핀셋·마스킹 테이프·직각자', '핀바이스(0.5~1mm 드릴) — 손잡이·경첩 구멍용'].map((x) => h('li', {}, x))),
@@ -45,16 +48,30 @@ const GUIDE = [
 ];
 
 export function guidePage(root) {
+  const toc = h('nav', { class: 'doc__toc', 'aria-label': '목차' }, GUIDE.map(([id, t]) => h('a', { href: `#guide`, dataset: { g: id }, onclick: (e) => { e.preventDefault(); document.getElementById(`g-${id}`).scrollIntoView({ behavior: 'smooth' }); } }, t)));
   const page = h('div', { class: 'page wrap doc' },
-    h('nav', { class: 'doc__toc', 'aria-label': '목차' }, GUIDE.map(([id, t]) => h('a', { href: `#guide`, onclick: (e) => { e.preventDefault(); document.getElementById(`g-${id}`).scrollIntoView({ behavior: 'smooth' }); } }, t))),
+    toc,
     h('div', { class: 'doc__body' },
-      h('header', {}, h('h1', {}, '도면 한 장에서 손바닥 위 가구까지'), h('p', {}, '미니어처 가구는 네 단계로 만듭니다. 각 단계는 워크벤치의 탭 하나와 짝을 이룹니다.')),
+      h('header', { class: 'pagehead' }, h('h1', {}, '도면 한 장에서 손바닥 위 가구까지'), h('p', {}, '미니어처 가구는 네 단계로 만듭니다. 각 단계는 워크벤치의 탭 하나와 짝을 이룹니다.')),
       h('ol', { class: 'flow' }, [['01', '도면', '축척을 고르면 삼면도·분해도·부품도가 그려집니다.'], ['02', '재단', '1:1 템플릿을 인쇄해 붙이고 자릅니다.'], ['03', '조립', '3D 순서를 따라 붙입니다.'], ['04', '마감', '칠하고, 씌우고, 손잡이를 답니다.']].map(([n, t, d]) => h('li', {}, h('i', {}, n), h('b', {}, t), h('span', {}, d)))),
       GUIDE.map(([id, t, body]) => h('section', { id: `g-${id}` }, h('h2', {}, t), body())),
       h('div', { class: 'hero__cta' }, h('a', { class: 'btn btn--lg btn--mat', href: '#item-billy' }, '첫 작품으로 BILLY 만들기'), h('a', { class: 'btn btn--lg', href: '#home' }, '컬렉션 보기'))));
   root.append(page);
   document.title = '만드는 법 — MINIATYR';
-  return () => {};
+  // 목차: 지금 읽는 절을 표시한다(화면 위 35% 선을 넘은 마지막 절, 끝까지 내리면 마지막 절)
+  const secs = GUIDE.map(([id]) => document.getElementById(`g-${id}`));
+  let raf = 0;
+  const spy = () => {
+    raf = 0;
+    let cur = null;
+    for (const s of secs) if (s.getBoundingClientRect().top <= innerHeight * 0.35) cur = s;
+    if (innerHeight + scrollY >= document.documentElement.scrollHeight - 4) cur = secs[secs.length - 1];
+    for (const a of toc.children) { if (cur && cur.id === `g-${a.dataset.g}`) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current'); }
+  };
+  const onScroll = () => { if (!raf) raf = requestAnimationFrame(spy); };
+  addEventListener('scroll', onScroll, { passive: true });
+  spy();
+  return () => { removeEventListener('scroll', onScroll); cancelAnimationFrame(raf); };
 }
 
 // ---------------------------------------------------------------- 스케일 랩
@@ -78,14 +95,17 @@ export function labPage(root) {
       <div style="position:absolute;left:${pad}px;top:8px;color:#eef7f1;font:600 12px var(--f-mono)">${esc(it.name)} 정면 · 1:${S.N} · ${fmt(w / S.N, 1)} × ${fmt(hh / S.N, 1)} mm (실제 크기)</div></div>`;
     tbl.replaceChildren(...SCALES.map((s) => h('tr', { class: s.n === S.N ? 'is-on' : null }, h('td', { class: 'mono' }, s.label), h('td', { class: 'num' }, fmt(w / s.n, 1)), h('td', { class: 'num' }, fmt(d / s.n, 1)), h('td', { class: 'num' }, fmt(hh / s.n, 1)))));
   }
+  // 고르기 → 보기 → 견주기 순서. 넓은 화면에서는 판이 왼쪽에 서고 고르기·표가 오른쪽에 쌓이며,
+  // 좁은 화면에서는 이 순서대로 내려가 큰 판을 지나기 전에 가구와 축척을 고를 수 있다.
   const page = h('div', { class: 'page wrap' },
-    h('div', { class: 'sec__head', style: { paddingTop: '20px' } }, h('div', {}, h('h2', {}, '완성하면 실제로 얼마나 클까'), h('p', {}, '초록 판의 눈금은 1cm입니다. 가구 정면이 화면에 실제 크기로 그려집니다.'))),
-    h('div', { class: 'lab' }, board,
-      h('aside', { class: 'lab__side' },
-        h('div', { class: 'panel ctl' },
-          h('div', { class: 'ctl__row' }, h('span', {}, '가구'), h('label', { class: 'field' }, sel)),
-          h('div', { class: 'ctl__row' }, h('span', {}, '축척'), seg),
-          h('div', { class: 'ctl__row' }, h('span', {}, '화면 보정'), cal, h('p', { style: { fontSize: 'var(--t-xs)', color: 'var(--ink-3)', lineHeight: 1.5 } }, '실제 신용카드를 화면의 점선 카드에 대고, 폭이 같아질 때까지 조절하세요. 한 번 맞추면 이 기기에 기억됩니다.'))),
+    h('header', { class: 'pagehead' }, h('h1', {}, '완성하면 실제로 얼마나 클까'), h('p', {}, '초록 판의 눈금은 1cm입니다. 가구 정면이 화면에 실제 크기로 그려집니다.')),
+    h('div', { class: 'lab' },
+      h('div', { class: 'panel ctl lab__ctl' },
+        h('div', { class: 'ctl__row' }, h('span', {}, '가구'), h('label', { class: 'field' }, sel)),
+        h('div', { class: 'ctl__row' }, h('span', {}, '축척'), seg),
+        h('div', { class: 'ctl__row' }, h('span', {}, '화면 보정'), cal, h('p', { class: 'fineprint' }, '실제 신용카드를 화면의 점선 카드에 대고, 폭이 같아질 때까지 조절하세요. 한 번 맞추면 이 기기에 기억됩니다.'))),
+      board,
+      h('div', { class: 'lab__side' },
         h('div', { class: 'tablewrap' }, h('table', { class: 't' }, h('thead', {}, h('tr', {}, ['축척', '폭', '깊이', '높이 (mm)'].map((x, i) => h('th', { class: i ? 'num' : null, scope: 'col' }, x)))), tbl)),
         h('a', { class: 'btn btn--mat', href: '#home', onclick: (e) => { e.preventDefault(); location.hash = `#item-${S.id}`; } }, '이 가구 만들러 가기'))));
   root.append(page);
@@ -96,26 +116,28 @@ export function labPage(root) {
 
 // ---------------------------------------------------------------- 내 공방
 export function workshopPage(root) {
-  const list = h('div', { style: { display: 'grid', gap: '12px' } });
+  const list = h('div', { class: 'projects' });
   function draw() {
     const items = Object.entries(store.all().items).filter(([, v]) => v.started || (v.done && v.done.length)).map(([id, v]) => ({ it: getItem(id), v })).filter((x) => x.it).sort((a, b) => (b.v.started || 0) - (a.v.started || 0));
     list.replaceChildren();
     if (!items.length) {
-      list.append(h('div', { class: 'panel', style: { padding: '40px 24px', textAlign: 'center', display: 'grid', gap: '14px', justifyItems: 'center' } },
-        h('p', { style: { fontWeight: 700, fontSize: 'var(--t-lg)' } }, '아직 시작한 작품이 없습니다'),
-        h('p', { style: { color: 'var(--ink-2)', maxWidth: '30em' } }, '가구를 골라 조립 탭에서 단계를 체크하면 여기에 진행 상황이 쌓입니다. 기록은 이 기기의 브라우저에만 저장됩니다.'),
+      list.append(h('div', { class: 'panel empty-state' },
+        h('p', { class: 'empty-state__t' }, '아직 시작한 작품이 없습니다'),
+        h('p', {}, '가구를 골라 조립 탭에서 단계를 체크하면 여기에 진행 상황이 쌓입니다. 기록은 이 기기의 브라우저에만 저장됩니다.'),
         h('a', { class: 'btn btn--mat', href: '#home' }, '컬렉션에서 고르기')));
       return;
     }
     for (const { it, v } of items) {
-      const total = buildModel(it, { N: 12, variant: v.variant || undefined }).steps.length, done = (v.done || []).length;
+      // 변형을 바꿔 단계 수가 줄어도 "5/4단계"처럼 넘치지 않게, 지금 단계 수 안의 완료만 센다
+      const total = buildModel(it, { N: 12, variant: v.variant || undefined }).steps.length, done = (v.done || []).filter((n) => n <= total).length;
       let armed = false;
       const del = h('button', { type: 'button', class: 'btn btn--sm btn--ghost', onclick: () => { if (!armed) { armed = true; del.textContent = '한 번 더 누르면 지웁니다'; setTimeout(() => { armed = false; del.textContent = '기록 지우기'; }, 3000); return; } store.dropItem(it.id); toast(`${it.name} 진행 기록을 지웠습니다.`); draw(); } }, '기록 지우기');
+      // 줄마다 같은 행동이라 잉크 버튼(화면에 하나)이 아닌 보통 버튼을 쓴다
       list.append(h('div', { class: 'panel proj' },
         h('img', { src: thumb(it.id), alt: '' }),
-        h('div', { style: { display: 'grid', gap: '6px', minWidth: 0 } }, h('h3', {}, it.name), h('p', {}, `${it.ko} ${it.type} · ${done}/${total}단계${done >= total ? ' · 완성' : ''}`),
+        h('div', { class: 'proj__body' }, h('h3', {}, it.name), h('p', {}, `${it.ko} ${it.type} · ${done}/${total}단계${done >= total ? ' · 완성' : ''}`),
           h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(total), 'aria-valuenow': String(done), 'aria-label': `${it.name} 진행률` }, h('i', { style: { '--p': `${Math.min(100, (done / total) * 100)}%` } }))),
-        h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, h('a', { class: 'btn btn--sm btn--mat', href: `#item-${it.id}` }, done >= total ? '다시 보기' : '이어서 만들기'), del)));
+        h('div', { class: 'proj__actions' }, h('a', { class: 'btn btn--sm', href: `#item-${it.id}` }, done >= total ? '다시 보기' : '이어서 만들기'), del)));
     }
   }
   const file = h('input', { type: 'file', id: 'ws-file', accept: 'application/json,.json', class: 'sr', onchange: async (e) => {
@@ -125,11 +147,13 @@ export function workshopPage(root) {
     e.target.value = '';
   } });
   const page = h('div', { class: 'page wrap' },
-    h('div', { class: 'sec__head', style: { paddingTop: '20px' } }, h('div', {}, h('h2', {}, '만들고 있는 것들'), h('p', {}, '조립 단계를 체크한 가구가 여기에 모입니다.')),
-      h('div', { style: { display: 'flex', gap: '8px' } },
+    h('header', { class: 'pagehead pagehead--split' },
+      h('div', {}, h('h1', {}, '만들고 있는 것들'), h('p', {}, '조립 단계를 체크한 가구가 여기에 모입니다.')),
+      h('div', { class: 'pagehead__tools' },
         h('button', { type: 'button', class: 'btn btn--sm', html: `${icon('down')} 백업 저장`, onclick: () => saveFile('miniatyr-backup.json', JSON.stringify(store.all(), null, 2), 'application/json') }),
-        h('label', { class: 'btn btn--sm', for: 'ws-file', tabindex: '0', onkeydown: (e) => { if (e.key === 'Enter') file.click(); } }, '백업 불러오기'), file)),
-    list, h('div', { style: { height: '72px' } }));
+        // 파일 고르기를 여는 진짜 버튼(라벨에 tabindex 를 주던 방식은 Space 키가 듣지 않았다)
+        h('button', { type: 'button', class: 'btn btn--sm', html: `${icon('up')} 백업 불러오기`, onclick: () => file.click() }), file)),
+    list);
   root.append(page);
   draw();
   document.title = '내 공방 — MINIATYR';

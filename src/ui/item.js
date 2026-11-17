@@ -95,8 +95,9 @@ export function itemPage(root, id, ctx) {
   });
   const panel = h('div', { class: 'tabpanel', id: 'tabpanel', role: 'tabpanel' });
   const side = h('div', { class: 'bench__side' },
-    h('header', { class: 'title' }, h('span', { class: 'tape', style: { justifySelf: 'start' } }, `No.${no3(item.no)} · ${cat ? cat.ko : ''}`), h('h1', {}, item.name), h('p', {}, `${item.ko} ${item.type}`)),
-    ctl, h('div', { class: 'panel', style: { overflow: 'hidden' } }, tabBar, panel));
+    // 순번·분류는 제목 위 라벨이 아니라 이름 아래의 정보 줄로 둔다(docs/DESIGN_SYSTEM.md 의 .tape 규칙)
+    h('header', { class: 'title' }, h('h1', {}, item.name), h('p', {}, `${item.ko} ${item.type}`), h('p', { class: 'title__meta' }, `No.${no3(item.no)} · ${cat ? cat.ko : ''}`)),
+    ctl, h('div', { class: 'panel panel--tabs' }, tabBar, panel));
   page.append(h('div', { class: 'bench' }, h('div', { class: 'bench__stage' }, viewer), side));
   root.append(page);
 
@@ -141,7 +142,8 @@ export function itemPage(root, id, ctx) {
   // ───── 탭 내용
   function renderTab() {
     panel.setAttribute('aria-labelledby', `tab-${S.tab}`);
-    panel.replaceChildren(...({ over: tabOver, draw: tabDraw, cut: tabCut, asm: tabAsm, out: tabOut }[S.tab])());
+    // 조건부로 빠진 자리(null)가 replaceChildren 에서 "null" 글자로 찍히지 않게 걸러 낸다
+    panel.replaceChildren(...({ over: tabOver, draw: tabDraw, cut: tabCut, asm: tabAsm, out: tabOut }[S.tab])().flat().filter(Boolean));
   }
   function tabOver() {
     const shop = shoppingList(list, model), dif = scaleDifficulty(item.diff, S.N), mins = Math.round((20 + list.count * 3.5 * (0.7 + dif * 0.25)) / 10) * 10;
@@ -158,7 +160,7 @@ export function itemPage(root, id, ctx) {
       h('ul', { class: 'checks' }, shop.items.map((x) => h('li', {}, x.name, h('span', {}, x.amount)))),
       h('h3', {}, '도구'),
       h('ul', { class: 'checks' }, shop.tools.map((x) => h('li', {}, x))),
-      h('div', { class: 'hero__cta', style: { marginTop: '4px' } },
+      h('div', { class: 'hero__cta' },
         h('button', { type: 'button', class: 'btn btn--mat', onclick: () => setTab('draw') }, '도면 보기'),
         h('button', { type: 'button', class: 'btn', onclick: () => setTab('asm') }, '조립 순서 보기')),
     ];
@@ -216,13 +218,13 @@ export function itemPage(root, id, ctx) {
     const body = h('tbody', {}, list.rows.map((r) => h('tr', { dataset: { key: r.label }, tabindex: '0',
       onmouseenter: () => pickRow(r, false), onfocus: () => pickRow(r, false), onclick: () => pickRow(r, true), onkeydown: (e) => { if (e.key === 'Enter') pickRow(r, true); } },
       h('td', {}, h('span', { class: 'badge' }, r.label)),
-      h('td', {}, r.name, r.opt ? h('small', {}, '선택 소품') : null, r.warn ? h('small', { class: 'warn' }, r.warn) : null, r.note ? h('small', {}, r.note) : null),
+      // 재료는 따로 열을 두지 않고 부품 이름 아래에 둔다: 좁은 옆 칸과 휴대폰에서도 치수 열이 화면 안에 남는다
+      h('td', {}, r.name, h('small', {}, `${r.info.ko} · ${r.material}`), r.opt ? h('small', {}, '선택 소품') : null, r.warn ? h('small', { class: 'warn' }, r.warn) : null, r.note ? h('small', {}, r.note) : null),
       h('td', { class: 'num' }, `×${r.qty}`),
-      h('td', { class: 'num' }, r.dim, h('small', {}, `실물 ${r.dimReal}`)),
-      h('td', {}, r.info.ko, h('small', {}, r.material)))));
+      h('td', { class: 'num' }, r.dim, h('small', {}, `실물 ${r.dimReal}`)))));
     return [
-      h('p', {}, `부품 ${list.rows.length}종 ${list.count}개. 줄을 누르면 3D에서 해당 부품이 노랗게 표시됩니다. 치수는 미니어처 mm입니다.`),
-      h('div', { class: 'tablewrap' }, h('table', { class: 't' }, h('thead', {}, h('tr', {}, ['부호', '부품', '수량', '길이 × 폭 × 두께', '재료'].map((x, i) => h('th', { class: i === 2 || i === 3 ? 'num' : null, scope: 'col' }, x)))), body)),
+      h('p', {}, `부품 ${list.rows.length}종 ${list.count}개. 줄을 누르면 3D에서 해당 부품이 노랗게 표시됩니다. 치수는 길이 × 폭 × 두께, 미니어처 mm입니다.`),
+      h('div', { class: 'tablewrap' }, h('table', { class: 't t--pick' }, h('thead', {}, h('tr', {}, ['부호', '부품 · 재료', '수량', '치수 (mm)'].map((x, i) => h('th', { class: i >= 2 ? 'num' : null, scope: 'col' }, x)))), body)),
       lin.length ? h('h3', {}, '각재·환봉·철사 절단 계획 (재료 길이 300mm 기준)') : null,
       lin.length ? h('ul', { class: 'checks' }, lin.map((g) => h('li', {}, `${g.sec} — ${g.pieces.length}토막`, h('span', {}, `합계 ${fmt(g.total, 0)}mm · ${g.count}개 필요`)))) : null,
       h('div', { class: 'note', html: `${icon('info')}<span>평면 부품은 <b>도면 → 재단 템플릿</b> 시트에 실제 크기로 배치돼 있습니다. 인쇄해 재료에 붙이면 따로 치수를 옮겨 그릴 필요가 없습니다.</span>` }),
@@ -294,7 +296,7 @@ export function itemPage(root, id, ctx) {
           if (!stage) throw new Error('이 기기에서는 3D 렌더를 쓸 수 없습니다.');
           await saveFile(`${base}-render.png`, await canvasBlob(stage.renderStill({ samples: 96 })));
         })),
-      h('p', { style: { fontSize: 'var(--t-xs)', color: 'var(--ink-3)' } }, '도면 PDF·SVG는 도면 탭, 재단표 CSV·DXF는 재단 탭에 있습니다.'),
+      h('p', { class: 'fineprint' }, '도면 PDF·SVG는 도면 탭, 재단표 CSV·DXF는 재단 탭에 있습니다.'),
     ];
   }
 
