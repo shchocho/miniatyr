@@ -4,7 +4,9 @@
 // 층 높이의 정수배(0.12mm 층이면 0.84mm)까지 두껍게 한다. 바깥면은 그대로 두고 **안쪽으로만** 키운다.
 //   안쪽 = 맞닿은 이웃 부품이 더 많이 뻗어 있는 쪽(서랍 바닥 → 서랍 옆판이 있는 위, 뒤판 → 본체가 있는 앞).
 //   이웃이 없으면 분해 방향(ex)의 반대, 그것도 없으면 모델 중심 쪽. 그래도 가구 바깥 상자를 넘으면 반대쪽·양쪽 순으로 바꾼다.
-// 원형 부품(봉·철사·구슬, B2)과 회전체(갓, B3)는 아직 손대지 않는다.
+// 지름 보정(B2): 봉·철사·구슬·둥근 손잡이가 profile.minRound(FDM 1.0mm)보다 가늘면 축을 그대로 두고 굵게 한다.
+//   가구 바깥 상자를 넘으면 넘은 만큼 안으로 민다. 길이가 최소 형상보다 짧아 굵게 해도 점에 불과한 것은 빼고 dropped 에 남긴다.
+// 회전체 갓(cone, B3)은 아직 손대지 않는다.
 
 import { orientFn, orientedMesh, bboxOf, V } from './geom.js';
 import { classify } from './kit.js';
@@ -31,6 +33,22 @@ function adjustable(p) {
   }
 }
 
+/** 둥근 부품의 지름·길이(실물 mm)와 지름을 f 배로 키우는 함수. 해당 없으면 null. */
+function roundOf(p) {
+  switch (p.kind) {
+    case 'cyl':
+      return p.stock === 'disc' ? null : { d: 2 * Math.max(p.r, p.r2 ?? p.r), l: p.len, grow: (q, f) => { q.r = p.r * f; if (p.r2 != null) q.r2 = p.r2 * f; } };
+    case 'sph':
+      return { d: 2 * p.r * Math.min(1, p.sy ?? 1), l: 2 * p.r, grow: (q, f) => { q.r = p.r * f; } };
+    case 'tube':
+      return { d: 2 * p.r, l: p.cut?.l ?? Infinity, grow: (q, f) => { q.r = p.r * f; } };
+    case 'lathe':
+      return p.stock === 'cone' ? null : { d: p.cut.d, l: p.cut.l, grow: (q, f) => { q.profile = p.profile.map(([r, y, ...rest]) => [r * f, y, ...rest]); } };
+    default:
+      return null;
+  }
+}
+
 const worldBox = (q) => { const bb = bboxOf(orientedMesh(q, 0).v); return { min: V.add(bb.min, q.pos), max: V.add(bb.max, q.pos), center: V.add(bb.center, q.pos) }; };
 const excess = (bb, outer) => { let e = 0; for (let a = 0; a < 3; a++) e += Math.max(0, outer.min[a] - bb.min[a]) + Math.max(0, bb.max[a] - outer.max[a]); return e; };
 
@@ -50,13 +68,29 @@ function neighbourSide(p, d, parts) {
 
 /**
  * 출력용 모델을 만든다. profile = printProfile(프린터, 층 모드).
- * 돌려주는 값: { model: 고친 복사본, changes: [{ id, name, kind, from, to, axes: [{ axis, from, to, side }] }] } (두께는 미니어처 mm)
+ * 돌려주는 값: { model: 고친 복사본, changes: [{ id, name, kind, from, to, axes: [{ axis, from, to, side }] }], dropped: [{ id, name, reason }] }
+ * (두께·지름은 미니어처 mm. 원형 부품은 axis 'd')
  */
 export function printModel(model, profile) {
   const N = model.N, layer = profile.layer;
   const W = Number((Math.ceil(profile.weak / layer - 1e-9) * layer).toFixed(6));   // 최소 벽을 층의 정수배로 올린 값
   const outer = model.bbox, changes = [];
+  const dropped = [], R = profile.minRound;
   const parts = model.parts.map((p) => {
+    const rd = p.inner ? null : roundOf(p);
+    if (rd && rd.d / N < R - 1e-9) {
+      if (rd.l / N < profile.minFeature) { dropped.push({ id: p.id, name: p.name, reason: 'tiny' }); return null; }
+      const q = { ...p, pos: [...p.pos] };
+      rd.grow(q, (R * N) / rd.d);
+      let bb = worldBox(q);
+      if (!p.opt) {   // 바깥 상자를 넘은 만큼 안으로
+        for (let a = 0; a < 3; a++) q.pos[a] += Math.max(0, outer.min[a] - bb.min[a]) - Math.max(0, bb.max[a] - outer.max[a]);
+        bb = worldBox(q);
+      }
+      Object.assign(q, { bb: { min: bb.min, max: bb.max }, center: bb.center }, classify(q));
+      changes.push({ id: p.id, name: p.name, kind: p.kind, from: rd.d / N, to: R, axes: [{ axis: 'd', from: rd.d / N, to: R, side: 0 }] });
+      return q;
+    }
     const dims = p.inner ? [] : adjustable(p);
     if (!dims.some((d) => d.value / N < profile.weak - 1e-9)) return p;
     const q = { ...p, pos: [...p.pos], ...(p.size ? { size: [...p.size] } : {}) };
@@ -84,10 +118,10 @@ export function printModel(model, profile) {
     const before = dims.map((d) => d.value / N), after = adjustable(q).map((d) => d.value / N);
     changes.push({ id: p.id, name: p.name, kind: p.kind, from: Math.min(...before), to: Math.min(...after), axes });
     return q;
-  });
+  }).filter(Boolean);
   let min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
   for (const p of parts) if (!p.opt) for (let a = 0; a < 3; a++) { min[a] = Math.min(min[a], p.bb.min[a]); max[a] = Math.max(max[a], p.bb.max[a]); }
   if (!Number.isFinite(min[0])) { min = outer.min; max = outer.max; }
   const bbox = { min, max, size: V.sub(max, min), center: V.mul(V.add(min, max), 0.5) };
-  return { model: { ...model, parts, bbox, print: { printer: profile.id, layer, minWall: W } }, changes };
+  return { model: { ...model, parts, bbox, print: { printer: profile.id, layer, minWall: W, minRound: R } }, changes, dropped };
 }

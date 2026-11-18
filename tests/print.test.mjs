@@ -89,7 +89,7 @@ test('프린터 프로파일: 모두 필수 값을 갖고, 층 높이는 세밀 
     assert.equal(p.bed.length, 3, p.id);
     assert.ok(p.bed.every((x) => x > 0), p.id);
     assert.ok(p.layers.fine > 0 && p.layers.fine <= p.layers.fast, p.id);
-    assert.ok(p.xy > 0 && p.minFeature > 0 && p.weak >= p.minFeature, p.id);
+    assert.ok(p.xy > 0 && p.minFeature > 0 && p.weak >= p.minFeature && p.minRound >= p.weak, p.id);
     assert.ok(p.overhangDeg > 0 && p.overhangDeg < 90, p.id);
     assert.ok(p.density > 0 && p.infill > 0 && p.infill <= 1 && p.wall >= 0 && p.clearance > 0, p.id);
     if (p.tech === 'fdm') assert.ok(p.nozzle > 0, p.id);
@@ -172,9 +172,11 @@ test('출력용 두께 보정: 100종 1:12·1:24 — 판·각재·원판·곡선
     const model = buildModel(item, { N });
     const { model: pm, changes } = printModel(model, FINE);
     for (const p of pm.parts) for (const d of flatDims(p)) assert.ok(d / N >= FINE.weak - 1e-9, `${item.id} 1:${N} ${p.name} ${(d / N).toFixed(3)}mm`);
-    for (const c of changes) for (const ax of c.axes) if (ax.axis !== 'wall') assert.ok(isMultiple(ax.to, FINE.layer), `${item.id} 1:${N} ${c.name} ${ax.axis} ${ax.to}`);
+    for (const c of changes) for (const ax of c.axes) if (ax.axis !== 'wall' && ax.axis !== 'd') assert.ok(isMultiple(ax.to, FINE.layer), `${item.id} 1:${N} ${c.name} ${ax.axis} ${ax.to}`);
     const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
-    for (const p of pm.parts) if (!p.opt) for (let a = 0; a < 3; a++) { lo[a] = Math.min(lo[a], p.bb.min[a]); hi[a] = Math.max(hi[a], p.bb.max[a]); }
+    // 둥근 부품(지름 보정)은 원래 상자로 센다: 아래 지름 보정 테스트가 따로 본다(판정은 원래 부품 기준, 두꺼워진 원판은 classify 가 turn 으로 바꿀 수 있다)
+    const orig = new Map(model.parts.map((p) => [p.id, p]));
+    for (const p of pm.parts) if (!p.opt) { const bb = roundDia(orig.get(p.id)) == null ? p.bb : orig.get(p.id).bb; for (let a = 0; a < 3; a++) { lo[a] = Math.min(lo[a], bb.min[a]); hi[a] = Math.max(hi[a], bb.max[a]); } }
     for (let a = 0; a < 3; a++) {
       const d = Math.max(Math.abs(lo[a] - model.bbox.min[a]), Math.abs(hi[a] - model.bbox.max[a])) / N;
       assert.ok(d <= 0.05, `${item.id} 1:${N} 바깥 크기 축 ${a} 변화 ${d.toFixed(3)}mm`);
@@ -198,4 +200,41 @@ test('출력용 두께 보정: 내보내기(완성형·키트 STL)가 출력용 
   const kit = EX.kitTriangles(pm, { bed: FINE.bed[0] }).flat().find((it) => it.part?.name === '뒤판');
   assert.ok(kit, '키트에 뒤판이 있음');
   near(Math.max(...kit.pts.map((p) => p[2])), 0.84, 0.02, '키트 뒤판 높이');
+});
+
+// 둥근 부품의 지름(실물 mm): classify 의 재단 지름과 같은 기준, 납작한 구는 낮은 쪽
+function roundDia(p) {
+  if (p.kind === 'cyl' && p.stock !== 'disc') return 2 * Math.max(p.r, p.r2 ?? p.r);
+  if (p.kind === 'sph') return 2 * p.r * Math.min(1, p.sy ?? 1);
+  if (p.kind === 'tube') return 2 * p.r;
+  if (p.kind === 'lathe' && p.stock !== 'cone') return p.cut.d;
+  return null;
+}
+
+// 가구 폭 전체에 걸친 철사 틀은 양쪽으로 굵어지므로 안으로 밀 수 없다: 바깥 크기는 지름이 는 양의 절반까지 바뀐다
+test('지름 보정: 100종 1:12·1:24 FDM — 봉·철사·구슬·손잡이 1.0mm 이상, 바깥 크기 변화는 지름이 는 양의 절반 이하', () => {
+  for (const N of [12, 24]) for (const item of CATALOG) {
+    const model = buildModel(item, { N });
+    const { model: pm, changes } = printModel(model, FINE);
+    const slack = Math.max(0.05, ...changes.filter((c) => c.axes[0].axis === 'd').map((c) => (c.to - c.from) / 2 + 1e-6));
+    for (const p of pm.parts) { const d = roundDia(p); if (d != null && !p.inner) assert.ok(d / N >= FINE.minRound - 1e-9, `${item.id} 1:${N} ${p.name} ${(d / N).toFixed(3)}mm`); }
+    for (let a = 0; a < 3; a++) {
+      const d = Math.max(Math.abs(pm.bbox.min[a] - model.bbox.min[a]), Math.abs(pm.bbox.max[a] - model.bbox.max[a])) / N;
+      assert.ok(d <= slack, `${item.id} 1:${N} 바깥 크기 축 ${a} 변화 ${d.toFixed(3)}mm`);
+    }
+  }
+});
+
+test('지름 보정: 축은 그대로 두고 굵게 하며, 굵게 해도 점에 불과한 부품은 빼고 목록에 남긴다', () => {
+  const model = buildModel(getItem('helmer'), { N: 24 });
+  const i = model.parts.findIndex((p) => p.name === '바퀴 축');
+  const { model: pm, changes } = printModel(model, FINE);
+  const a = model.parts[i], b = pm.parts.find((p) => p.id === a.id);
+  near(2 * b.r / 24, 1.0, 1e-9, '굵게 한 지름');
+  near(b.len, a.len, 1e-9, '길이는 그대로');
+  assert.ok(changes.some((c) => c.id === a.id && c.axes[0].axis === 'd'));
+  const tiny = { ...model, parts: model.parts.map((p, j) => (j === i ? { ...p, len: 0.1 * 24 } : p)) };
+  const r = printModel(tiny, FINE);
+  assert.deepEqual(r.dropped.map((d) => d.id), [a.id]);
+  assert.ok(!r.model.parts.some((p) => p.id === a.id));
 });

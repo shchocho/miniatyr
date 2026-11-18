@@ -6,13 +6,14 @@
 //   layers      층 높이 — fine(미니어처 기본) · fast(빠르게)
 //   minFeature  이보다 좁은 단면은 나오지 않는다(노즐 폭이 막는 수평 두께)
 //   weak        이보다 얇으면 부러지기 쉽다(FDM 외벽 2줄)
+//   minRound    봉·철사·구슬처럼 둥근 부품의 최소 지름(둥근 단면은 같은 폭의 판보다 약하다, 할 일 B2)
 //   overhangDeg 아래층이 받쳐 주지 않아도 되는 기울기
 //   wall·infill 무게 계산용: 바깥 벽 두께 · 벽 안쪽을 채우는 비율(레진은 속이 찬 채로 굳는다)
 //   clearance   끼워 맞추는 두 면 사이 틈(위치잡이·핀, 할 일 D2)
 
 const FDM = {
   tech: 'fdm', nozzle: 0.4, material: 'PLA', density: 1.24,
-  xy: 0.1, layers: { fine: 0.12, fast: 0.2 }, minFeature: 0.3, weak: 0.8, overhangDeg: 45,
+  xy: 0.1, layers: { fine: 0.12, fast: 0.2 }, minFeature: 0.3, weak: 0.8, minRound: 1.0, overhangDeg: 45,
   wall: 0.8, infill: 0.25, clearance: 0.2,
 };
 
@@ -23,7 +24,7 @@ export const PRINTERS = [
   { ...FDM, id: 'fdm-250', name: 'FDM · 250 × 210mm 판', example: 'Prusa MK4S 급', bed: [250, 210, 220] },
   {
     id: 'msla', tech: 'resin', name: 'MSLA 레진', example: '10인치 MSLA 급', bed: [218, 123, 250],
-    material: '표준 레진', density: 1.1, xy: 0.05, layers: { fine: 0.03, fast: 0.05 }, minFeature: 0.15, weak: 0.4, overhangDeg: 45,
+    material: '표준 레진', density: 1.1, xy: 0.05, layers: { fine: 0.03, fast: 0.05 }, minFeature: 0.15, weak: 0.4, minRound: 0.5, overhangDeg: 45,
     wall: 0, infill: 1, clearance: 0.1,
   },
 ];
