@@ -4,7 +4,9 @@
 // 여기는 100종 해석표(sweep)와, 층 줄무늬가 보이는 등각 PNG 렌더러만 둔다.
 //
 //   node tools/print-sim.mjs sweep                      100종 × 5축척 표 → docs/print-sim/sweep.csv
-//   node tools/print-sim.mjs render <id> <N> [assembled|kit] [fdm|fdmFine|resin]   → docs/print-sim/<id>-1x<N>-<모드>-<프로파일>.png
+//   node tools/print-sim.mjs render <id> <N> [assembled|kit] [fdm|fdmFine|resin] [print]   → docs/print-sim/<id>-1x<N>-<모드>-<프로파일>[-print].png
+//   node tools/print-sim.mjs overlaps                   두께 보정으로 새로 생긴 겹침 → docs/print-sim/thicken-overlaps.json
+//     print = 내보내기와 같은 출력용 모델(printModel 두께 보정)로 뽑는다
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
@@ -17,6 +19,7 @@ import * as EX from '../src/core/export.js';
 import { SCALES } from '../src/core/scale.js';
 import { simulate } from '../src/core/printsim.js';
 import { printProfile, getPrinter } from '../src/data/printers.js';
+import { printModel } from '../src/core/printprep.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'docs', 'print-sim');
@@ -126,6 +129,10 @@ export function analyse(item, N, { fit = false } = {}) {
     for (const t of it.tris) { const a = it.pts[t[0]], b = it.pts[t[1]], c = it.pts[t[2]]; if (Math.abs(a[2]) < 1e-6 && Math.abs(b[2]) < 1e-6 && Math.abs(c[2]) < 1e-6) contact += Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])) / 2; }
     if (contact < 0.3 * it.w * it.h) unstable++;
   }
+  // 출력용 모델(printModel, 기준 프린터 0.12mm 층 = 내보내기 기본값)에서 다시 센 두께
+  const pList = cutList(printModel(model, PROFILES.fdmFine).model).rows.filter((r) => !r.opt);
+  const pThick = pList.map((r) => ({ r, t: minDim(r) })).filter((x) => x.t != null && Number.isFinite(x.t));
+  const pCnt = (lim) => pThick.filter((x) => x.t < lim).reduce((a, x) => a + x.r.qty, 0);
   const stocks = {};
   for (const r of rows) stocks[r.stock] = (stocks[r.stock] || 0) + r.qty;
   return {
@@ -134,6 +141,7 @@ export function analyse(item, N, { fit = false } = {}) {
     minT: thick.length ? Math.min(...thick.map((x) => x.t)) : null,
     fdmLost: cnt(PROFILES.fdm.minFeature), fdmWeak: cnt(PROFILES.fdm.weak), resinLost: cnt(PROFILES.resin.minFeature), resinWeak: cnt(PROFILES.resin.weak),
     fitFdm: fitsUpright(S, BEDS.fdm), fitA1mini: fitsUpright(S, BEDS.a1mini), fitResin: fitsUpright(S, BEDS.resin), fitResinAny: fits(S, BEDS.resin),
+    printLost: pCnt(PROFILES.fdm.minFeature), printWeak: pCnt(PROFILES.fdm.weak),
     plates: plates.length, kitParts, unstable, oversize, stocks,
     thinParts: thick.filter((x) => x.t < PROFILES.fdm.weak).sort((a, b) => a.t - b.t).slice(0, 4).map((x) => `${x.r.label} ${x.r.name} ${x.t.toFixed(2)}`),
   };
@@ -144,9 +152,9 @@ function sweep() {
   mkdirSync(OUT, { recursive: true });
   const rows = [];
   for (const it of CATALOG) for (const s of SCALES) { rows.push(analyse(it, s.n)); rows.push(analyse(it, s.n, { fit: true })); }
-  const head = ['no', 'id', 'name', 'cat', 'N', 'fit', 'parts', 'W', 'D', 'H', 'minT', 'fdmLost', 'fdmWeak', 'resinLost', 'resinWeak', 'fitFdm256', 'fitA1mini', 'fitResin', 'plates', 'kitParts', 'unstableKit', 'oversizeKit', 'volMm3', 'thinParts', 'stocks'];
+  const head = ['no', 'id', 'name', 'cat', 'N', 'fit', 'parts', 'W', 'D', 'H', 'minT', 'fdmLost', 'fdmWeak', 'resinLost', 'resinWeak', 'printLost', 'printWeak', 'fitFdm256', 'fitA1mini', 'fitResin', 'plates', 'kitParts', 'unstableKit', 'oversizeKit', 'volMm3', 'thinParts', 'stocks'];
   const q = (v) => (typeof v === 'string' && /[",]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-  const csv = [head.join(','), ...rows.map((r) => [r.no, r.id, r.name, r.cat, r.N, r.fit ? 1 : 0, r.parts, ...r.size.map((x) => x.toFixed(1)), r.minT == null ? '' : r.minT.toFixed(2), r.fdmLost, r.fdmWeak, r.resinLost, r.resinWeak, +r.fitFdm, +r.fitA1mini, +r.fitResin, r.plates, r.kitParts, r.unstable, r.oversize, r.volMm3.toFixed(0), r.thinParts.join(' / '), Object.entries(r.stocks).map(([k, v]) => `${k}:${v}`).join(' ')].map(q).join(','))];
+  const csv = [head.join(','), ...rows.map((r) => [r.no, r.id, r.name, r.cat, r.N, r.fit ? 1 : 0, r.parts, ...r.size.map((x) => x.toFixed(1)), r.minT == null ? '' : r.minT.toFixed(2), r.fdmLost, r.fdmWeak, r.resinLost, r.resinWeak, r.printLost, r.printWeak, +r.fitFdm, +r.fitA1mini, +r.fitResin, r.plates, r.kitParts, r.unstable, r.oversize, r.volMm3.toFixed(0), r.thinParts.join(' / '), Object.entries(r.stocks).map(([k, v]) => `${k}:${v}`).join(' ')].map(q).join(','))];
   writeFileSync(join(OUT, 'sweep.csv'), `﻿${csv.join('\n')}\n`);
   // 축척별 요약
   const sum = {};
@@ -155,6 +163,7 @@ function sweep() {
     sum[`1:${s.n}${fit ? ' fit' : ''}`] = {
       items: n,
       'FDM 사라지는 부품 없음 %': pct((r) => r.fdmLost === 0), 'FDM 0.8mm 미만 없음 %': pct((r) => r.fdmWeak === 0),
+      '출력용 FDM 사라지는 부품 없음 %': pct((r) => r.printLost === 0), '출력용 FDM 0.8mm 미만 없음 %': pct((r) => r.printWeak === 0),
       '레진 사라지는 부품 없음 %': pct((r) => r.resinLost === 0), '조립형 256 판에 들어감 %': pct((r) => r.fitFdm), '조립형 A1 mini(180)에 들어감 %': pct((r) => r.fitA1mini), '조립형 레진 판에 들어감 %': pct((r) => r.fitResin),
       '키트 판 수(평균)': +(R.reduce((a, r) => a + r.plates, 0) / n).toFixed(2), '키트에서 눕기 불안정한 부품(평균)': +(R.reduce((a, r) => a + r.unstable, 0) / n).toFixed(1), '키트 판보다 큰 부품이 있는 가구': R.filter((r) => r.oversize).length,
     };
@@ -163,13 +172,43 @@ function sweep() {
   console.log(JSON.stringify(sum, null, 2));
 }
 
-function renderOne(id, N, mode = 'assembled', pk = 'fdm', view = {}) {
+// 두께 보정으로 새로 생긴 겹침(할 일 B1 → D1 입력). 두껍게 한 부품과 다른 부품의 경계 상자가 새로 0.01mm³ 넘게 겹치면 센다.
+// shortcut: 축 정렬 경계 상자 기준이라 기울어진·둥근 부품은 과대 추정, D1 접촉 그래프가 생기면 그것으로 바꾼다
+const boxOverlap = (a, b) => [0, 1, 2].reduce((m, k) => m * Math.max(0, Math.min(a.max[k], b.max[k]) - Math.max(a.min[k], b.min[k])), 1);
+export function thickenOverlaps(item, N, prof = PROFILES.fdmFine) {
+  const raw = buildModel(item, { N }), { model, changes } = printModel(raw, prof);
+  const changed = new Set(changes.map((c) => c.id)), byId = new Map(raw.parts.map((p) => [p.id, p])), N3 = N ** 3, out = [];
+  const live = model.parts.filter((p) => !p.opt && !p.inner);
+  for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) {
+    const a = live[i], b = live[j]; if (!changed.has(a.id) && !changed.has(b.id)) continue;
+    const grew = (boxOverlap(a.bb, b.bb) - boxOverlap(byId.get(a.id).bb, byId.get(b.id).bb)) / N3;
+    if (grew > 0.01) out.push({ a: a.name, b: b.name, mm3: +grew.toFixed(2) });
+  }
+  return { id: item.id, N, changed: changes.length, overlaps: out };
+}
+function overlaps() {
+  const sum = {}, items = [];
+  for (const N of [12, 24]) {
+    const R = CATALOG.map((it) => thickenOverlaps(it, N));
+    const pairs = R.flatMap((r) => r.overlaps.map((o) => `${o.a} ↔ ${o.b}`)), top = {};
+    for (const k of pairs) top[k] = (top[k] || 0) + 1;
+    sum[`1:${N}`] = { '두껍게 한 부품': R.reduce((a, r) => a + r.changed, 0), '새 겹침(쌍)': pairs.length, '겹침이 생긴 가구': R.filter((r) => r.overlaps.length).length,
+      '많은 쌍': Object.entries(top).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => `${k} ×${v}`) };
+    items.push(...R.filter((r) => r.overlaps.length));
+  }
+  mkdirSync(OUT, { recursive: true });
+  writeFileSync(join(OUT, 'thicken-overlaps.json'), JSON.stringify({ summary: sum, items }, null, 2));
+  console.log(JSON.stringify(sum, null, 2));
+}
+
+function renderOne(id, N, mode = 'assembled', pk = 'fdm', print = false, view = {}) {
   const item = getItem(id); if (!item) throw new Error(`no item ${id}`);
-  const prof = PROFILES[pk], model = buildModel(item, { N });
+  const prof = PROFILES[pk], raw = buildModel(item, { N });
+  const model = print ? printModel(raw, prof).model : raw;   // print: 내보내기와 같은 출력용 모델(두께 보정)
   const groups = mode === 'kit' ? EX.kitTriangles(model, { bed: prof.bed[0] })[0] : EX.modelTriangles(model);
   const t0 = Date.now(), res = simulate(groups, prof, { render: (g) => makeRenderer({ ...g, view }) });
   mkdirSync(OUT, { recursive: true });
-  const file = `${id}-1x${N}-${mode}-${pk}.png`;
+  const file = `${id}-1x${N}-${mode}-${pk}${print ? '-print' : ''}.png`;
   writeFileSync(join(OUT, file), res.image);
   delete res.image;
   const out = { id, N, mode, profile: pk, file, ms: Date.now() - t0, ...Object.fromEntries(Object.entries(res).map(([k, v]) => [k, Array.isArray(v) ? v.map((x) => (typeof x === 'number' ? +x.toFixed(1) : x)) : typeof v === 'number' ? +v.toFixed(2) : v])) };
@@ -180,6 +219,7 @@ function renderOne(id, N, mode = 'assembled', pk = 'fdm', view = {}) {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const [cmd, ...a] = process.argv.slice(2);
   if (cmd === 'sweep') sweep();
-  else if (cmd === 'render') renderOne(a[0], Number(a[1] || 12), a[2] || 'assembled', a[3] || 'fdm');
-  else console.log('node tools/print-sim.mjs sweep | render <id> <N> [assembled|kit] [fdm|fdmFine|resin]');
+  else if (cmd === 'overlaps') overlaps();
+  else if (cmd === 'render') renderOne(a[0], Number(a[1] || 12), a[2] || 'assembled', a[3] || 'fdm', a[4] === 'print');
+  else console.log('node tools/print-sim.mjs sweep | render <id> <N> [assembled|kit] [fdm|fdmFine|resin] [print]');
 }

@@ -188,3 +188,14 @@ test('출력용 두께 보정: 레진이면 0.4mm 를 0.03mm 층의 정수배(0.
   const b = pm.parts.find((p) => p.name === '뒤판');
   near(Math.min(...b.size) / 12, 0.42, 1e-9, '레진 뒤판 두께');
 });
+
+test('출력용 두께 보정: 내보내기(완성형·키트 STL)가 출력용 모델을 받아 뒤판을 0.84mm 로 낸다', async () => {
+  const EX = await import('../src/core/export.js');
+  const { model: pm } = printModel(buildModel(getItem('billy'), { N: 12 }), FINE);
+  const back = EX.modelTriangles(pm).find((g) => g.part.name === '뒤판');
+  const span = [0, 1, 2].map((a) => Math.max(...back.pts.map((p) => p[a])) - Math.min(...back.pts.map((p) => p[a])));
+  near(Math.min(...span), 0.84, 0.02, '완성형 STL 뒤판 두께');
+  const kit = EX.kitTriangles(pm, { bed: FINE.bed[0] }).flat().find((it) => it.part?.name === '뒤판');
+  assert.ok(kit, '키트에 뒤판이 있음');
+  near(Math.max(...kit.pts.map((p) => p[2])), 0.84, 0.02, '키트 뒤판 높이');
+});
