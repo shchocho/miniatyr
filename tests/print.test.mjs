@@ -238,3 +238,44 @@ test('지름 보정: 축은 그대로 두고 굵게 하며, 굵게 해도 점에
   assert.deepEqual(r.dropped.map((d) => d.id), [a.id]);
   assert.ok(!r.model.parts.some((p) => p.id === a.id));
 });
+
+// ---------------------------------------------------------------- 투명판·회전체 벽(할 일 B3)
+test('투명판: 출력용 모델은 유리·거울을 빼고 이름과 함께 dropped 에 남긴다(keepFilm 이면 둔다)', () => {
+  const model = buildModel(getItem('detolf'), { N: 12 });
+  const films = model.parts.filter((p) => p.stock === 'film' && !p.inner);
+  assert.ok(films.length > 0);
+  const { model: pm, dropped } = printModel(model, FINE);
+  assert.ok(!pm.parts.some((p) => p.stock === 'film'));
+  assert.deepEqual(dropped.filter((d) => d.reason === 'film').map((d) => d.name).sort(), films.map((p) => p.name).sort());
+  assert.ok(printModel(model, FINE, { keepFilm: true }).model.parts.some((p) => p.stock === 'film'));
+});
+
+test('회전체 벽: 100종 1:12·1:24 의 얇은 갓·컵 단면은 바깥면을 두고 최소 벽(0.84mm)까지 두꺼워진다', () => {
+  const wall = (pr) => { let A = 0, P = 0; pr.forEach((a, i) => { const b = pr[(i + 1) % pr.length]; A += a[0] * b[1] - b[0] * a[1]; P += Math.hypot(b[0] - a[0], b[1] - a[1]); }); return Math.abs(A) / P; };
+  // 실제 벽: 밀린 꼭짓점(안쪽 면)에서 그대로인 바깥 변(축 위 변 제외)까지의 가장 짧은 거리
+  const localWall = (pr, orig) => {
+    const same = (v) => orig.some((o) => Math.hypot(o[0] - v[0], o[1] - v[1]) < 1e-9), n = pr.length;
+    const outer = []; for (let e = 0; e < n; e++) { const a = pr[e], b = pr[(e + 1) % n]; if (same(a) && same(b) && !(a[0] === 0 && b[0] === 0)) outer.push([a, b]); }
+    let m = Infinity;
+    for (const v of pr) if (!same(v)) for (const [a, b] of outer) { const dx = b[0] - a[0], dy = b[1] - a[1], u = Math.max(0, Math.min(1, ((v[0] - a[0]) * dx + (v[1] - a[1]) * dy) / (dx * dx + dy * dy || 1))); m = Math.min(m, Math.hypot(v[0] - a[0] - u * dx, v[1] - a[1] - u * dy)); }
+    return m;
+  };
+  let n = 0;
+  for (const N of [12, 24]) for (const item of CATALOG) {
+    const model = buildModel(item, { N }), { model: pm } = printModel(model, FINE);
+    for (const p of model.parts) if (p.kind === 'lathe' && p.stock === 'cone' && wall(p.profile) / N < FINE.weak) {
+      const q = pm.parts.find((x) => x.id === p.id); n++;
+      assert.ok(localWall(q.profile, p.profile) / N >= FINE.weak - 0.02, `${item.id} 1:${N} ${p.name} ${(localWall(q.profile, p.profile) / N).toFixed(3)}mm`);
+      near(Math.max(...q.profile.map((v) => v[0])), Math.max(...p.profile.map((v) => v[0])), 1e-9, `${item.id} ${p.name} 바깥 반지름`);
+    }
+  }
+  assert.ok(n >= 16, `얇은 회전체 ${n}개`);
+});
+
+test('회전체 벽: LAMPAN 1:12 갓은 출력용 모델이면 시뮬레이션에서 사라지지 않는다', async () => {
+  const EX = await import('../src/core/export.js');
+  const model = buildModel(getItem('lampan'), { N: 12 });
+  assert.ok(simulate(EX.modelTriangles(model), FDM_FAST).lostPct > 5, '원래 모델은 갓이 사라짐');
+  const res = simulate(EX.modelTriangles(printModel(model, FDM_FAST).model), FDM_FAST);
+  assert.equal(res.lostPct, 0);
+});

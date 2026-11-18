@@ -277,13 +277,17 @@ export function itemPage(root, id, ctx) {
   function tabOut() {
     // 출력용 모델: 고른 프린터의 최소 벽보다 얇은 판은 안쪽으로 두껍게(도면·재단표는 원래 모델 그대로)
     const prof = printProfile(store.get('printer'), store.get('printLayer'));
-    const { model: pm, changes } = printModel(model, prof);
+    const { model: pm, changes, dropped } = printModel(model, prof);
+    const names = (arr) => [...new Set(arr.map((d) => d.name))].map(esc).join(', ');
+    const film = dropped.filter((d) => d.reason === 'film'), tiny = dropped.filter((d) => d.reason === 'tiny');
     const pr = EX.printability(cutList(pm), prof.weak), base = `${item.id}-1x${S.N}`, fin = item.finishes[S.fin];
     const thick = changes.length ? `${changes.length}개 부품은 ${prof.weak}mm보다 얇아 출력용으로 안쪽을 자동으로 두껍게 합니다(도면·재단표는 그대로).` : '';
     return [
       h('p', {}, `축척 1:${S.N} 크기(mm)로 내보냅니다. 기준: ${prof.label}.${inArtifact() ? ' 이 화면에서는 STL·OBJ·DXF가 zip으로 묶여 저장됩니다.' : ''}`),
       pr.ok ? h('div', { class: 'note', html: `${icon('check')}<span>${thick ? `${esc(thick)} ` : ''}모든 부품이 ${pr.minWall}mm 이상이라 이 프린터로 출력할 수 있습니다.</span>` })
         : h('div', { class: 'note note--warn', html: `${icon('warn')}<span>${thick ? `${esc(thick)} ` : ''}그래도 ${pr.minWall}mm보다 얇은 부품 ${pr.thin.length}종: ${pr.thin.slice(0, 5).map((t) => `${esc(t.label)} ${esc(t.name)} ${fmt(t.t, 2)}mm`).join(', ')}. 더 큰 축척을 고르세요.</span>` }),
+      film.length ? h('div', { class: 'note', html: `${icon('info')}<span>투명판 ${film.length}개(${names(film)})는 출력하지 않습니다. 재단 탭의 DXF로 투명 필름이나 아크릴을 따로 자르세요.</span>` }) : null,
+      tiny.length ? h('div', { class: 'note', html: `${icon('info')}<span>너무 작아 출력해도 점에 불과한 부품 ${tiny.length}개(${names(tiny)})는 뺐습니다.</span>` }) : null,
       h('h3', {}, '3D 모델'),
       h('div', { class: 'exports' },
         exp('완성형 STL', '조립된 모습 한 덩어리. 장식용으로 통째 출력할 때.', 'STL', () => saveFile(`${base}.stl`, EX.toSTL(EX.modelTriangles(pm)), 'model/stl')),
