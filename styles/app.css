@@ -322,6 +322,8 @@ table.t { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
 
 /* 내보내기 */
 .exports { display: grid; gap: var(--s3); }
+.print-pick { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; margin-bottom: var(--s3); }
+.print-pick .field { flex: 1 1 16rem; }
 .export { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 12px 14px; border-radius: var(--r2); border: 1px solid var(--line); background: var(--surface-2); }
 .export b { font-weight: 700; } .export p { grid-column: 1; font-size: var(--t-xs); color: var(--ink-3); line-height: 1.5; }
 .export .btn { grid-row: 1 / span 2; grid-column: 2; }

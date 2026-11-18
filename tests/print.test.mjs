@@ -279,3 +279,26 @@ test('회전체 벽: LAMPAN 1:12 갓은 출력용 모델이면 시뮬레이션�
   const res = simulate(EX.modelTriangles(printModel(model, FDM_FAST).model), FDM_FAST);
   assert.equal(res.lostPct, 0);
 });
+
+// ---------------------------------------------------------------- 출력 점검 보고(할 일 B4)
+test('출력 점검 보고: BILLY 는 키트, KLIPPAN 은 조립형·키트 둘 다를 권하고, 수치는 CLI sweep 과 같다', async () => {
+  const { printReport } = await import('../src/core/printprep.js');
+  const { analyse } = await import('../tools/print-sim.mjs');
+  const rep = (id) => printReport(printModel(buildModel(getItem(id), { N: 12 }), FINE).model, FINE);
+  assert.deepEqual(rep('billy').recommend, ['kit']);
+  assert.deepEqual(rep('klippan').recommend, ['assembled', 'kit']);
+  for (const id of ['billy', 'klippan']) {
+    const r = rep(id), a = analyse(getItem(id), 12);
+    assert.equal(a.printPlates, r.plates); assert.equal(a.printFit, r.fitsBed); assert.equal(a.printGrams, r.grams); assert.equal(a.recommend, r.recommend.join('+'));
+  }
+});
+
+test('출력 점검 보고: 프린터를 바꾸면 판 수·판에 들어가는지가 바뀐다', async () => {
+  const { printReport } = await import('../src/core/printprep.js');
+  const model = buildModel(getItem('billy'), { N: 12 });
+  const at = (id) => { const prof = printProfile(id, 'fine'); return printReport(printModel(model, prof).model, prof); };
+  assert.equal(at('fdm-256').plates, 1);
+  assert.ok(at('fdm-180').plates > 1);
+  const big = buildModel(getItem('billy'), { N: 6 });   // 높이 337mm
+  assert.equal(printReport(printModel(big, FINE).model, FINE).fitsBed, false);
+});

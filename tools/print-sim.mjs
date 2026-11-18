@@ -19,7 +19,7 @@ import * as EX from '../src/core/export.js';
 import { SCALES } from '../src/core/scale.js';
 import { simulate } from '../src/core/printsim.js';
 import { printProfile, getPrinter } from '../src/data/printers.js';
-import { printModel } from '../src/core/printprep.js';
+import { printModel, printReport, fitsUpright } from '../src/core/printprep.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'docs', 'print-sim');
@@ -108,7 +108,6 @@ function encodePNG(rgb, w, h) {
 // ---------------------------------------------------------------- 해석(빠름): 두께·크기·키트 자세
 const minDim = (r) => { const m = r.mini; return r.stock === 'stick' ? m.b : r.stock === 'rod' || r.stock === 'wire' || r.stock === 'turn' ? m.d : r.stock === 'bead' ? m.d : r.stock === 'disc' ? m.t : m.t; };
 const fits = (sz, bed) => { const a = [...sz].sort((x, y) => x - y), b = [...bed].sort((x, y) => x - y); return a[0] <= b[0] && a[1] <= b[1] && a[2] <= b[2]; };
-const fitsUpright = (sz, bed) => (Math.max(sz[0], sz[1]) <= Math.max(bed[0], bed[1]) && Math.min(sz[0], sz[1]) <= Math.min(bed[0], bed[1]) && sz[2] <= bed[2]);
 
 export function analyse(item, N, { fit = false } = {}) {
   const model = buildModel(item, { N, fit }), list = cutList(model);
@@ -130,7 +129,8 @@ export function analyse(item, N, { fit = false } = {}) {
     if (contact < 0.3 * it.w * it.h) unstable++;
   }
   // 출력용 모델(printModel, 기준 프린터 0.12mm 층 = 내보내기 기본값)에서 다시 센 두께
-  const pList = cutList(printModel(model, PROFILES.fdmFine).model).rows.filter((r) => !r.opt);
+  const pm = printModel(model, PROFILES.fdmFine).model, rep = printReport(pm, PROFILES.fdmFine);   // 내보내기 탭 보고와 같은 값
+  const pList = cutList(pm).rows.filter((r) => !r.opt);
   const pThick = pList.map((r) => ({ r, t: minDim(r) })).filter((x) => x.t != null && Number.isFinite(x.t));
   const pCnt = (lim) => pThick.filter((x) => x.t < lim).reduce((a, x) => a + x.r.qty, 0);
   const stocks = {};
@@ -142,6 +142,7 @@ export function analyse(item, N, { fit = false } = {}) {
     fdmLost: cnt(PROFILES.fdm.minFeature), fdmWeak: cnt(PROFILES.fdm.weak), resinLost: cnt(PROFILES.resin.minFeature), resinWeak: cnt(PROFILES.resin.weak),
     fitFdm: fitsUpright(S, BEDS.fdm), fitA1mini: fitsUpright(S, BEDS.a1mini), fitResin: fitsUpright(S, BEDS.resin), fitResinAny: fits(S, BEDS.resin),
     printLost: pCnt(PROFILES.fdm.minFeature), printWeak: pCnt(PROFILES.fdm.weak),
+    printFit: rep.fitsBed, printPlates: rep.plates, printGrams: rep.grams, printFill: rep.fill, recommend: rep.recommend.join('+'),
     plates: plates.length, kitParts, unstable, oversize, stocks,
     thinParts: thick.filter((x) => x.t < PROFILES.fdm.weak).sort((a, b) => a.t - b.t).slice(0, 4).map((x) => `${x.r.label} ${x.r.name} ${x.t.toFixed(2)}`),
   };
@@ -152,9 +153,9 @@ function sweep() {
   mkdirSync(OUT, { recursive: true });
   const rows = [];
   for (const it of CATALOG) for (const s of SCALES) { rows.push(analyse(it, s.n)); rows.push(analyse(it, s.n, { fit: true })); }
-  const head = ['no', 'id', 'name', 'cat', 'N', 'fit', 'parts', 'W', 'D', 'H', 'minT', 'fdmLost', 'fdmWeak', 'resinLost', 'resinWeak', 'printLost', 'printWeak', 'fitFdm256', 'fitA1mini', 'fitResin', 'plates', 'kitParts', 'unstableKit', 'oversizeKit', 'volMm3', 'thinParts', 'stocks'];
+  const head = ['no', 'id', 'name', 'cat', 'N', 'fit', 'parts', 'W', 'D', 'H', 'minT', 'fdmLost', 'fdmWeak', 'resinLost', 'resinWeak', 'printLost', 'printWeak', 'printFit256', 'printPlates', 'printGrams', 'printFill', 'recommend', 'fitFdm256', 'fitA1mini', 'fitResin', 'plates', 'kitParts', 'unstableKit', 'oversizeKit', 'volMm3', 'thinParts', 'stocks'];
   const q = (v) => (typeof v === 'string' && /[",]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-  const csv = [head.join(','), ...rows.map((r) => [r.no, r.id, r.name, r.cat, r.N, r.fit ? 1 : 0, r.parts, ...r.size.map((x) => x.toFixed(1)), r.minT == null ? '' : r.minT.toFixed(2), r.fdmLost, r.fdmWeak, r.resinLost, r.resinWeak, r.printLost, r.printWeak, +r.fitFdm, +r.fitA1mini, +r.fitResin, r.plates, r.kitParts, r.unstable, r.oversize, r.volMm3.toFixed(0), r.thinParts.join(' / '), Object.entries(r.stocks).map(([k, v]) => `${k}:${v}`).join(' ')].map(q).join(','))];
+  const csv = [head.join(','), ...rows.map((r) => [r.no, r.id, r.name, r.cat, r.N, r.fit ? 1 : 0, r.parts, ...r.size.map((x) => x.toFixed(1)), r.minT == null ? '' : r.minT.toFixed(2), r.fdmLost, r.fdmWeak, r.resinLost, r.resinWeak, r.printLost, r.printWeak, +r.printFit, r.printPlates, r.printGrams.toFixed(1), r.printFill.toFixed(2), r.recommend, +r.fitFdm, +r.fitA1mini, +r.fitResin, r.plates, r.kitParts, r.unstable, r.oversize, r.volMm3.toFixed(0), r.thinParts.join(' / '), Object.entries(r.stocks).map(([k, v]) => `${k}:${v}`).join(' ')].map(q).join(','))];
   writeFileSync(join(OUT, 'sweep.csv'), `﻿${csv.join('\n')}\n`);
   // 축척별 요약
   const sum = {};
@@ -164,6 +165,7 @@ function sweep() {
       items: n,
       'FDM 사라지는 부품 없음 %': pct((r) => r.fdmLost === 0), 'FDM 0.8mm 미만 없음 %': pct((r) => r.fdmWeak === 0),
       '출력용 FDM 사라지는 부품 없음 %': pct((r) => r.printLost === 0), '출력용 FDM 0.8mm 미만 없음 %': pct((r) => r.printWeak === 0),
+      '출력용 키트 판 수(평균)': +(R.reduce((a, r) => a + r.printPlates, 0) / n).toFixed(2), '출력용 필라멘트 g(평균, 서포트 제외)': +(R.reduce((a, r) => a + r.printGrams, 0) / n).toFixed(1), '조립형도 권하는 가구': R.filter((r) => r.recommend.includes('assembled')).length,
       '레진 사라지는 부품 없음 %': pct((r) => r.resinLost === 0), '조립형 256 판에 들어감 %': pct((r) => r.fitFdm), '조립형 A1 mini(180)에 들어감 %': pct((r) => r.fitA1mini), '조립형 레진 판에 들어감 %': pct((r) => r.fitResin),
       '키트 판 수(평균)': +(R.reduce((a, r) => a + r.plates, 0) / n).toFixed(2), '키트에서 눕기 불안정한 부품(평균)': +(R.reduce((a, r) => a + r.unstable, 0) / n).toFixed(1), '키트 판보다 큰 부품이 있는 가구': R.filter((r) => r.oversize).length,
     };

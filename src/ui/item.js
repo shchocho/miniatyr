@@ -10,8 +10,8 @@ import { modelSVG } from '../core/project.js';
 import { materialOf, MATERIALS } from '../data/materials.js';
 import * as EX from '../core/export.js';
 import { SEASONS } from '../data/seasons.js';
-import { printModel } from '../core/printprep.js';
-import { printProfile } from '../data/printers.js';
+import { printModel, printReport } from '../core/printprep.js';
+import { PRINTERS, LAYER_MODES, printProfile } from '../data/printers.js';
 
 const TABS = [['over', '개요'], ['draw', '도면'], ['cut', '재단'], ['asm', '조립'], ['out', '내보내기']];
 const VIEW_ORDER = ['iso', 'front', 'side', 'top'];
@@ -275,19 +275,34 @@ export function itemPage(root, id, ctx) {
 
   // 내보내기
   function tabOut() {
-    // 출력용 모델: 고른 프린터의 최소 벽보다 얇은 판은 안쪽으로 두껍게(도면·재단표는 원래 모델 그대로)
+    // 출력용 모델: 고른 프린터의 최소 벽·지름보다 얇은 부품은 안쪽으로 두껍게, 투명판은 뺀다(도면·재단표는 원래 모델 그대로)
     const prof = printProfile(store.get('printer'), store.get('printLayer'));
-    const { model: pm, changes, dropped } = printModel(model, prof);
+    const { model: pm, changes, dropped } = printModel(model, prof), rep = printReport(pm, prof);
     const names = (arr) => [...new Set(arr.map((d) => d.name))].map(esc).join(', ');
     const film = dropped.filter((d) => d.reason === 'film'), tiny = dropped.filter((d) => d.reason === 'tiny');
     const pr = EX.printability(cutList(pm), prof.weak), base = `${item.id}-1x${S.N}`, fin = item.finishes[S.fin];
-    const thick = changes.length ? `${changes.length}개 부품은 ${prof.weak}mm보다 얇아 출력용으로 안쪽을 자동으로 두껍게 합니다(도면·재단표는 그대로).` : '';
+    const setPrint = (k, v) => { store.set(k, v); renderTab(); };
+    const printerSel = h('select', { 'aria-label': '프린터', onchange: (e) => setPrint('printer', e.target.value) },
+      PRINTERS.map((p) => h('option', { value: p.id, selected: p.id === prof.id ? '' : null }, `${p.name} (${p.example})`)));
+    const layerSeg = h('div', { class: 'seg', role: 'group', 'aria-label': '층 높이' },
+      Object.entries(LAYER_MODES).map(([k, v]) => h('button', { type: 'button', 'aria-pressed': String(k === prof.mode), onclick: () => setPrint('printLayer', k) }, `${v} ${prof.layers[k]}mm`)));
+    const both = rep.recommend.includes('assembled'), [W, D, H] = rep.size.map((x) => fmt(x));
     return [
-      h('p', {}, `축척 1:${S.N} 크기(mm)로 내보냅니다. 기준: ${prof.label}.${inArtifact() ? ' 이 화면에서는 STL·OBJ·DXF가 zip으로 묶여 저장됩니다.' : ''}`),
-      pr.ok ? h('div', { class: 'note', html: `${icon('check')}<span>${thick ? `${esc(thick)} ` : ''}모든 부품이 ${pr.minWall}mm 이상이라 이 프린터로 출력할 수 있습니다.</span>` })
-        : h('div', { class: 'note note--warn', html: `${icon('warn')}<span>${thick ? `${esc(thick)} ` : ''}그래도 ${pr.minWall}mm보다 얇은 부품 ${pr.thin.length}종: ${pr.thin.slice(0, 5).map((t) => `${esc(t.label)} ${esc(t.name)} ${fmt(t.t, 2)}mm`).join(', ')}. 더 큰 축척을 고르세요.</span>` }),
-      film.length ? h('div', { class: 'note', html: `${icon('info')}<span>투명판 ${film.length}개(${names(film)})는 출력하지 않습니다. 재단 탭의 DXF로 투명 필름이나 아크릴을 따로 자르세요.</span>` }) : null,
-      tiny.length ? h('div', { class: 'note', html: `${icon('info')}<span>너무 작아 출력해도 점에 불과한 부품 ${tiny.length}개(${names(tiny)})는 뺐습니다.</span>` }) : null,
+      h('p', {}, `축척 1:${S.N} 크기(mm)로 내보냅니다.${inArtifact() ? ' 이 화면에서는 STL·OBJ·DXF가 zip으로 묶여 저장됩니다.' : ''}`),
+      h('h3', {}, '출력 점검'),
+      h('div', { class: 'print-pick' }, h('label', { class: 'field' }, printerSel), layerSeg),
+      h('dl', { class: 'terms' },
+        h('dt', {}, '권하는 방식'),
+        h('dd', {}, both ? '완성형·부품 키트 둘 다. 덩어리 모양이라 통째로 세워 뽑아도 서포트가 적습니다.' : '부품 키트. 틀·상자 모양이라 통째로 세워 뽑으면 선반·좌판 아래를 서포트가 채웁니다.'),
+        h('dt', {}, '두께 보정'),
+        h('dd', {}, changes.length ? `${changes.length}개 부품을 안쪽으로 자동으로 두껍게 합니다(벽 ${fmt(pm.print.minWall, 2)}mm · 둥근 부품 지름 ${fmt(prof.minRound, 2)}mm 이상). 바깥 크기와 도면·재단표는 그대로입니다.` : `모든 부품이 벽 ${fmt(prof.weak, 2)}mm 이상이라 그대로 뽑습니다.`),
+        dropped.length ? h('dt', {}, '뺀 부품') : null,
+        dropped.length ? h('dd', { html: [film.length ? `투명판 ${film.length}개(${names(film)}): 재단 탭의 DXF로 투명 필름이나 아크릴을 따로 자르세요.` : '', tiny.length ? `너무 작아 점에 불과한 ${tiny.length}개(${names(tiny)}).` : ''].filter(Boolean).join(' ') }) : null,
+        h('dt', {}, '출력판'),
+        h('dd', {}, `완성형 ${W} × ${D} × ${H} mm — ${rep.fitsBed ? '판에 들어갑니다' : `판(${prof.bed.join(' × ')}mm)보다 큽니다`}. 부품 키트 ${rep.plates}판${rep.oversize ? `, 판보다 큰 부품 ${rep.oversize}개` : ''}.`),
+        h('dt', {}, '재료'),
+        h('dd', {}, `약 ${fmt(rep.grams, rep.grams < 10 ? 1 : 0)}g (${prof.material}, 서포트 제외 · 근사)`)),
+      pr.ok ? null : h('div', { class: 'note note--warn', html: `${icon('warn')}<span>보정 뒤에도 ${pr.minWall}mm보다 얇은 부품 ${pr.thin.length}종: ${pr.thin.slice(0, 5).map((t) => `${esc(t.label)} ${esc(t.name)} ${fmt(t.t, 2)}mm`).join(', ')}. 더 큰 축척을 고르세요.</span>` }),
       h('h3', {}, '3D 모델'),
       h('div', { class: 'exports' },
         exp('완성형 STL', '조립된 모습 한 덩어리. 장식용으로 통째 출력할 때.', 'STL', () => saveFile(`${base}.stl`, EX.toSTL(EX.modelTriangles(pm)), 'model/stl')),

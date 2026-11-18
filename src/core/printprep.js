@@ -12,6 +12,7 @@
 
 import { orientFn, orientedMesh, bboxOf, V } from './geom.js';
 import { classify } from './kit.js';
+import { modelTriangles, kitTriangles } from './export.js';
 
 const TOUCH = 0.5;   // 실물 mm: 이만큼 떨어져 있어도 맞닿은 이웃으로 본다
 const PLANE_T = { xy: [0, 0, 1], zy: [-1, 0, 0], xz: [0, -1, 0] };   // 압출 두께 방향(geom.js PLANE 에 [0,0,1] 을 넣은 값)
@@ -183,4 +184,42 @@ export function printModel(model, profile, { keepFilm = false } = {}) {
   if (!Number.isFinite(min[0])) { min = outer.min; max = outer.max; }
   const bbox = { min, max, size: V.sub(max, min), center: V.mul(V.add(min, max), 0.5) };
   return { model: { ...model, parts, bbox, print: { printer: profile.id, layer, minWall: W, minRound: R } }, changes, dropped };
+}
+
+// ---------------------------------------------------------------- 출력 점검 보고(할 일 B4). 내보내기 탭과 sweep 이 같은 값을 쓴다.
+
+const BLOCK_FILL = 0.4;   // 부품 부피 ÷ 바깥 상자 부피. 소파 0.45–0.72, 상자·의자·침대 틀 0.32 이하(1:12 100종)
+
+/** 껍질 하나의 부피·겉넓이(mm³·mm²) */
+function volArea(g) {
+  let v = 0, a = 0;
+  for (const t of g.tris) {
+    const p = g.pts[t[0]], q = g.pts[t[1]], r = g.pts[t[2]];
+    v += (p[0] * (q[1] * r[2] - q[2] * r[1]) - p[1] * (q[0] * r[2] - q[2] * r[0]) + p[2] * (q[0] * r[1] - q[1] * r[0])) / 6;
+    const u = V.sub(q, p), w = V.sub(r, p);
+    a += Math.hypot(u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]) / 2;
+  }
+  return { v: Math.abs(v), a };
+}
+
+/** 판에 세워 놓을 수 있는가(폭·깊이는 돌려 맞춰도 됨, 높이는 그대로) */
+export const fitsUpright = (sz, bed) => Math.max(sz[0], sz[1]) <= Math.max(bed[0], bed[1]) && Math.min(sz[0], sz[1]) <= Math.min(bed[0], bed[1]) && sz[2] <= bed[2];
+
+/**
+ * 출력용 모델(printModel 결과)의 점검 보고. 미니어처 mm·g.
+ * 필라멘트는 부품마다 겉 벽(profile.wall)은 꽉 차게, 그 안은 profile.infill 로 센 근사(서포트 제외, 시뮬레이터와 같은 가정).
+ */
+export function printReport(pm, profile) {
+  const N = pm.N, sz = pm.bbox.size, size = [sz[0] / N, sz[2] / N, sz[1] / N];   // 폭 × 깊이 × 높이
+  const plates = kitTriangles(pm, { bed: profile.bed[0] });
+  let oversize = 0;
+  for (const pl of plates) for (const it of pl) if (it.w > profile.bed[0] || it.h > profile.bed[1]) oversize++;
+  let vol = 0, mm3 = 0;
+  for (const g of modelTriangles(pm)) { const { v, a } = volArea(g), shell = Math.min(v, a * profile.wall); vol += v; mm3 += shell + profile.infill * (v - shell); }
+  const fill = vol / (size[0] * size[1] * size[2]);
+  return {
+    size, fitsBed: fitsUpright(size, profile.bed), plates: plates.length, oversize,
+    grams: (mm3 * profile.density) / 1000, fill,
+    recommend: fill >= BLOCK_FILL ? ['assembled', 'kit'] : ['kit'],
+  };
 }
