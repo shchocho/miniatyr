@@ -58,7 +58,7 @@ tools/              개발 도구(정적 서버, 썸네일 렌더, 점검용 스
 tests/              코어·룸 세트 단위 테스트
 ```
 
-설계 설명은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), 디자인 시스템은 [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)에 있습니다.
+설계 설명은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), 디자인 시스템은 [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md), 색 결정과 대비는 [DESIGN.md](DESIGN.md)에 있습니다.
 
 ## 라이선스
 

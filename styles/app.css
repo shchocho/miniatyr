@@ -1,19 +1,22 @@
 /* MINIATYR 디자인 시스템 — "쇼룸"
    조용한 바탕 위에서 3D 장면 하나가 주인공이다. 표면은 그림자 대신 경계선으로 나누고, 떠 있는 것(토스트·검색·3D 위 카드)만
-   그림자를 가진다. 주 행동은 잉크색 버튼 하나, 강조색(소나무 녹색)은 선택·진행·포커스·링크에만 쓴다.
-   결정과 이유는 docs/DESIGN_SYSTEM.md 에 있다. */
+   그림자를 가진다. 주 행동은 잉크색 버튼 하나, 강조색(호두나무)은 선택·진행·포커스·링크에만 쓴다.
+   색 결정과 대비는 DESIGN.md, 컴포넌트 규칙은 docs/DESIGN_SYSTEM.md 에 있다.
+   색 토큰을 바꾸면 src/three/stage.js 의 LINE_THEMES.canvas·치수선 색도 맞춘다(tests/tokens.test.mjs 가 확인한다). */
 :root {
   /* 색: 바탕 → 표면 → 가장 위 → 파인 곳 · 글자 세 단계 · 경계선(--edge 는 조작 요소의 테두리, 바탕 대비 3:1 이상) */
-  --bg: #f5f4f0; --surface: #faf9f6; --surface-2: #ffffff; --sunk: #ecebe5;
-  --ink: #141413; --ink-2: #3d3d3a; --ink-3: #66655f; --line: #dcdad2; --line-2: #e8e6df; --edge: #86857d;
-  /* 강조(소나무 녹색): 선택·진행·포커스·링크 */
-  --mat: #2f5d46; --on-mat: #ffffff; --mat-text: #2f5d46; --mat-soft: #e3ece6;
+  --bg: #f6f2ec; --surface: #fbf8f4; --surface-2: #fffdfa; --sunk: #ede7df;
+  --ink: #1f1611; --ink-2: #45372e; --ink-3: #6a5b50; --line: #ded4c8; --line-2: #e9e1d7; --edge: #8c7d70;
+  /* 강조(호두나무): 선택·진행·포커스·링크 */
+  --mat: #7c2d12; --on-mat: #ffffff; --mat-text: #7c2d12; --mat-soft: #f1e0d6;
   /* 3D 위의 표시·배지: 잉크 칩 */
-  --tape: #141413; --on-tape: #f5f4f0;
-  --ok: #2c7d51; --warn: #8a5a10; --bad: #b3261e;
-  --sh-a: rgba(20, 20, 19, 0.06); --sh-k: rgba(20, 20, 19, 0.18);
-  --glass: #faf9f6; --scrim: rgba(20, 20, 19, 0.45);
-  --studio-b: #ecebe5; --board: #2f5d46;
+  --tape: #1f1611; --on-tape: #f6f2ec;
+  /* 상태색: 강조색(적갈색)과 헷갈리지 않게 주의는 겨자, 오류는 자주 쪽으로 옮겼다 */
+  --ok: #2c7d51; --warn: #6a6600; --bad: #a3123a;
+  --sh-a: rgba(31, 22, 17, 0.06); --sh-k: rgba(31, 22, 17, 0.18);
+  --glass: #fbf8f4; --scrim: rgba(31, 22, 17, 0.45);
+  /* --board 는 스케일 랩의 커팅 매트(실제 물건의 색)라 강조색을 따라가지 않는다 */
+  --studio-b: #ede7df; --board: #2f5d46;
   /* 글자: 한 가족(IBM Plex Sans KR) + 치수·순번용 고정폭 */
   --f-body: "IBM Plex Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
   --f-display: var(--f-body);
@@ -32,14 +35,15 @@
 }
 /* 어두운 화면: main.js 가 data-theme 을 늘 light 또는 dark 로 정한다(시스템 설정을 따를 때도) */
 :root[data-theme="dark"] {
-  --bg: #0e0e0d; --surface: #171716; --surface-2: #1f1f1d; --sunk: #0a0a09;
-  --ink: #edece7; --ink-2: #b9b8b2; --ink-3: #8f8e88; --line: #2a2a27; --line-2: #1f1f1d; --edge: #72716a;
-  --mat: #8fc7a4; --on-mat: #0e0e0d; --mat-text: #8fc7a4; --mat-soft: #17261d;
-  --tape: #edece7; --on-tape: #141413;
-  --ok: #55b987; --warn: #e0a84a; --bad: #f0786c;
+  --bg: #110d0a; --surface: #1a1511; --surface-2: #231c17; --sunk: #0b0806;
+  --ink: #f0e9e2; --ink-2: #c5b8ac; --ink-3: #9c8e82; --line: #33291f; --line-2: #231c17; --edge: #7e6f62;
+  --mat: #e9a37f; --on-mat: #110d0a; --mat-text: #e9a37f; --mat-soft: #2d1a10;
+  --tape: #f0e9e2; --on-tape: #1f1611;
+  /* 주의는 강조색(살구)과 떨어지게 노랑 쪽, 오류는 분홍 쪽 */
+  --ok: #55b987; --warn: #e0c04a; --bad: #ff6a8a;
   --sh-a: rgba(0, 0, 0, 0.3); --sh-k: rgba(0, 0, 0, 0.55);
-  --glass: #171716; --scrim: rgba(0, 0, 0, 0.62);
-  --studio-b: #0e0e0d; --board: #1f3a2c;
+  --glass: #1a1511; --scrim: rgba(0, 0, 0, 0.62);
+  --studio-b: #110d0a; --board: #1f3a2c;
   color-scheme: dark;
 }
 

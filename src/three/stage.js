@@ -59,10 +59,13 @@ const LINE_THEMES = {
   blueprint: { bg: '#143d68', fill: '#1a4a7c', line: '#eaf3fb' },
   paper: { bg: '#f4f5f2', fill: '#fbfbf9', line: '#18221e' },
   night: { bg: '#0f1a16', fill: '#14231d', line: '#bfe3d3' },
-  // 홈의 스크롤 연출: 페이지 바탕과 같은 종이 위에 잉크 선(문구 패널이 바탕에 녹는다)
-  canvas: { bg: '#f5f4f0', fill: '#fbfaf7', line: '#141413' },
-  canvasDark: { bg: '#0e0e0d', fill: '#171716', line: '#edece7' },
+  // 홈의 스크롤 연출: 페이지 바탕과 같은 종이 위에 잉크 선(문구 패널이 바탕에 녹는다).
+  // styles/app.css 의 --bg · --surface · --ink 와 같은 값(tests/tokens.test.mjs 가 확인한다)
+  canvas: { bg: '#f6f2ec', fill: '#fbf8f4', line: '#1f1611' },
+  canvasDark: { bg: '#110d0a', fill: '#1a1511', line: '#f0e9e2' },
 };
+// 치수선은 강조 글자색(--mat-text)과 같다
+const DIM_COLOR = { light: '#7c2d12', dark: '#e9a37f' };
 
 // 스튜디오 조명 배치. 환경맵(반사)과 누적 렌더의 면광원 표본이 같은 표를 쓴다.
 const ENV_INTENSITY = 1.1;
@@ -285,11 +288,12 @@ export class Stage {
     this.rtA = new THREE.WebGLRenderTarget(w, h, { type, samples: ms, depthBuffer: true });
     this.rtS = new THREE.WebGLRenderTarget(w, h, { type, samples: 0, depthBuffer: true });
     this.rtB = new THREE.WebGLRenderTarget(w, h, { type: this.floatBlend ? THREE.FloatType : type, depthBuffer: false });
-    this.rtL = new THREE.WebGLRenderTarget(w, h, { samples: ms, depthBuffer: true });
+    // 선 보기도 반정밀도: 8비트 선형 버퍼는 어두운 바탕(#110d0a 등)을 (13,13,13)으로 뭉개 페이지 바탕과 어긋난다
+    this.rtL = new THREE.WebGLRenderTarget(w, h, { type, samples: ms, depthBuffer: true });
   }
 
   _buildDims() {
-    this.dimLines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: '#2f5d46', depthTest: false, transparent: true }));
+    this.dimLines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: DIM_COLOR.light, depthTest: false, transparent: true }));
     this.dimLines.renderOrder = 999; this.dimLines.visible = false; this.dimLines.frustumCulled = false;
     this.scene.add(this.dimLines);
     this.labelBox = document.createElement('div');
@@ -301,7 +305,7 @@ export class Stage {
   // ------------------------------------------------------------ public state
   setTheme(theme) {
     this.theme = { ...this.theme, ...theme };
-    if (this.dimLines) this.dimLines.material.color.set(this.theme.dark ? '#8fc7a4' : '#2f5d46');   // 치수선: 강조색
+    if (this.dimLines) this.dimLines.material.color.set(this.theme.dark ? DIM_COLOR.dark : DIM_COLOR.light);   // 치수선: 강조색
     if (this.coveMat) this.coveMat.color.set(this.theme.cove || (this.theme.dark ? '#2b2b28' : '#dad8d0'));
     this.invalidate();
   }
