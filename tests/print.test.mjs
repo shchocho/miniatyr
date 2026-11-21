@@ -89,7 +89,7 @@ test('프린터 프로파일: 모두 필수 값을 갖고, 층 높이는 세밀 
     assert.equal(p.bed.length, 3, p.id);
     assert.ok(p.bed.every((x) => x > 0), p.id);
     assert.ok(p.layers.fine > 0 && p.layers.fine <= p.layers.fast, p.id);
-    assert.ok(p.xy > 0 && p.minFeature > 0 && p.weak >= p.minFeature, p.id);
+    assert.ok(p.xy > 0 && p.minFeature > 0 && p.weak >= p.minFeature && p.minRound >= p.weak, p.id);
     assert.ok(p.overhangDeg > 0 && p.overhangDeg < 90, p.id);
     assert.ok(p.density > 0 && p.infill > 0 && p.infill <= 1 && p.wall >= 0 && p.clearance > 0, p.id);
     if (p.tech === 'fdm') assert.ok(p.nozzle > 0, p.id);
@@ -172,9 +172,11 @@ test('출력용 두께 보정: 100종 1:12·1:24 — 판·각재·원판·곡선
     const model = buildModel(item, { N });
     const { model: pm, changes } = printModel(model, FINE);
     for (const p of pm.parts) for (const d of flatDims(p)) assert.ok(d / N >= FINE.weak - 1e-9, `${item.id} 1:${N} ${p.name} ${(d / N).toFixed(3)}mm`);
-    for (const c of changes) for (const ax of c.axes) if (ax.axis !== 'wall') assert.ok(isMultiple(ax.to, FINE.layer), `${item.id} 1:${N} ${c.name} ${ax.axis} ${ax.to}`);
+    for (const c of changes) for (const ax of c.axes) if (ax.axis !== 'wall' && ax.axis !== 'd') assert.ok(isMultiple(ax.to, FINE.layer), `${item.id} 1:${N} ${c.name} ${ax.axis} ${ax.to}`);
     const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
-    for (const p of pm.parts) if (!p.opt) for (let a = 0; a < 3; a++) { lo[a] = Math.min(lo[a], p.bb.min[a]); hi[a] = Math.max(hi[a], p.bb.max[a]); }
+    // 둥근 부품(지름 보정)은 원래 상자로 센다: 아래 지름 보정 테스트가 따로 본다(판정은 원래 부품 기준, 두꺼워진 원판은 classify 가 turn 으로 바꿀 수 있다)
+    const orig = new Map(model.parts.map((p) => [p.id, p]));
+    for (const p of pm.parts) if (!p.opt) { const bb = roundDia(orig.get(p.id)) == null ? p.bb : orig.get(p.id).bb; for (let a = 0; a < 3; a++) { lo[a] = Math.min(lo[a], bb.min[a]); hi[a] = Math.max(hi[a], bb.max[a]); } }
     for (let a = 0; a < 3; a++) {
       const d = Math.max(Math.abs(lo[a] - model.bbox.min[a]), Math.abs(hi[a] - model.bbox.max[a])) / N;
       assert.ok(d <= 0.05, `${item.id} 1:${N} 바깥 크기 축 ${a} 변화 ${d.toFixed(3)}mm`);
@@ -187,4 +189,116 @@ test('출력용 두께 보정: 레진이면 0.4mm 를 0.03mm 층의 정수배(0.
   const { model: pm } = printModel(model, printProfile('msla', 'fine'));
   const b = pm.parts.find((p) => p.name === '뒤판');
   near(Math.min(...b.size) / 12, 0.42, 1e-9, '레진 뒤판 두께');
+});
+
+test('출력용 두께 보정: 내보내기(완성형·키트 STL)가 출력용 모델을 받아 뒤판을 0.84mm 로 낸다', async () => {
+  const EX = await import('../src/core/export.js');
+  const { model: pm } = printModel(buildModel(getItem('billy'), { N: 12 }), FINE);
+  const back = EX.modelTriangles(pm).find((g) => g.part.name === '뒤판');
+  const span = [0, 1, 2].map((a) => Math.max(...back.pts.map((p) => p[a])) - Math.min(...back.pts.map((p) => p[a])));
+  near(Math.min(...span), 0.84, 0.02, '완성형 STL 뒤판 두께');
+  const kit = EX.kitTriangles(pm, { bed: FINE.bed[0] }).flat().find((it) => it.part?.name === '뒤판');
+  assert.ok(kit, '키트에 뒤판이 있음');
+  near(Math.max(...kit.pts.map((p) => p[2])), 0.84, 0.02, '키트 뒤판 높이');
+});
+
+// 둥근 부품의 지름(실물 mm): classify 의 재단 지름과 같은 기준, 납작한 구는 낮은 쪽
+function roundDia(p) {
+  if (p.kind === 'cyl' && p.stock !== 'disc') return 2 * Math.max(p.r, p.r2 ?? p.r);
+  if (p.kind === 'sph') return 2 * p.r * Math.min(1, p.sy ?? 1);
+  if (p.kind === 'tube') return 2 * p.r;
+  if (p.kind === 'lathe' && p.stock !== 'cone') return p.cut.d;
+  return null;
+}
+
+// 가구 폭 전체에 걸친 철사 틀은 양쪽으로 굵어지므로 안으로 밀 수 없다: 바깥 크기는 지름이 는 양의 절반까지 바뀐다
+test('지름 보정: 100종 1:12·1:24 FDM — 봉·철사·구슬·손잡이 1.0mm 이상, 바깥 크기 변화는 지름이 는 양의 절반 이하', () => {
+  for (const N of [12, 24]) for (const item of CATALOG) {
+    const model = buildModel(item, { N });
+    const { model: pm, changes } = printModel(model, FINE);
+    const slack = Math.max(0.05, ...changes.filter((c) => c.axes[0].axis === 'd').map((c) => (c.to - c.from) / 2 + 1e-6));
+    for (const p of pm.parts) { const d = roundDia(p); if (d != null && !p.inner) assert.ok(d / N >= FINE.minRound - 1e-9, `${item.id} 1:${N} ${p.name} ${(d / N).toFixed(3)}mm`); }
+    for (let a = 0; a < 3; a++) {
+      const d = Math.max(Math.abs(pm.bbox.min[a] - model.bbox.min[a]), Math.abs(pm.bbox.max[a] - model.bbox.max[a])) / N;
+      assert.ok(d <= slack, `${item.id} 1:${N} 바깥 크기 축 ${a} 변화 ${d.toFixed(3)}mm`);
+    }
+  }
+});
+
+test('지름 보정: 축은 그대로 두고 굵게 하며, 굵게 해도 점에 불과한 부품은 빼고 목록에 남긴다', () => {
+  const model = buildModel(getItem('helmer'), { N: 24 });
+  const i = model.parts.findIndex((p) => p.name === '바퀴 축');
+  const { model: pm, changes } = printModel(model, FINE);
+  const a = model.parts[i], b = pm.parts.find((p) => p.id === a.id);
+  near(2 * b.r / 24, 1.0, 1e-9, '굵게 한 지름');
+  near(b.len, a.len, 1e-9, '길이는 그대로');
+  assert.ok(changes.some((c) => c.id === a.id && c.axes[0].axis === 'd'));
+  const tiny = { ...model, parts: model.parts.map((p, j) => (j === i ? { ...p, len: 0.1 * 24 } : p)) };
+  const r = printModel(tiny, FINE);
+  assert.deepEqual(r.dropped.map((d) => d.id), [a.id]);
+  assert.ok(!r.model.parts.some((p) => p.id === a.id));
+});
+
+// ---------------------------------------------------------------- 투명판·회전체 벽(할 일 B3)
+test('투명판: 출력용 모델은 유리·거울을 빼고 이름과 함께 dropped 에 남긴다(keepFilm 이면 둔다)', () => {
+  const model = buildModel(getItem('detolf'), { N: 12 });
+  const films = model.parts.filter((p) => p.stock === 'film' && !p.inner);
+  assert.ok(films.length > 0);
+  const { model: pm, dropped } = printModel(model, FINE);
+  assert.ok(!pm.parts.some((p) => p.stock === 'film'));
+  assert.deepEqual(dropped.filter((d) => d.reason === 'film').map((d) => d.name).sort(), films.map((p) => p.name).sort());
+  assert.ok(printModel(model, FINE, { keepFilm: true }).model.parts.some((p) => p.stock === 'film'));
+});
+
+test('회전체 벽: 100종 1:12·1:24 의 얇은 갓·컵 단면은 바깥면을 두고 최소 벽(0.84mm)까지 두꺼워진다', () => {
+  const wall = (pr) => { let A = 0, P = 0; pr.forEach((a, i) => { const b = pr[(i + 1) % pr.length]; A += a[0] * b[1] - b[0] * a[1]; P += Math.hypot(b[0] - a[0], b[1] - a[1]); }); return Math.abs(A) / P; };
+  // 실제 벽: 밀린 꼭짓점(안쪽 면)에서 그대로인 바깥 변(축 위 변 제외)까지의 가장 짧은 거리
+  const localWall = (pr, orig) => {
+    const same = (v) => orig.some((o) => Math.hypot(o[0] - v[0], o[1] - v[1]) < 1e-9), n = pr.length;
+    const outer = []; for (let e = 0; e < n; e++) { const a = pr[e], b = pr[(e + 1) % n]; if (same(a) && same(b) && !(a[0] === 0 && b[0] === 0)) outer.push([a, b]); }
+    let m = Infinity;
+    for (const v of pr) if (!same(v)) for (const [a, b] of outer) { const dx = b[0] - a[0], dy = b[1] - a[1], u = Math.max(0, Math.min(1, ((v[0] - a[0]) * dx + (v[1] - a[1]) * dy) / (dx * dx + dy * dy || 1))); m = Math.min(m, Math.hypot(v[0] - a[0] - u * dx, v[1] - a[1] - u * dy)); }
+    return m;
+  };
+  let n = 0;
+  for (const N of [12, 24]) for (const item of CATALOG) {
+    const model = buildModel(item, { N }), { model: pm } = printModel(model, FINE);
+    for (const p of model.parts) if (p.kind === 'lathe' && p.stock === 'cone' && wall(p.profile) / N < FINE.weak) {
+      const q = pm.parts.find((x) => x.id === p.id); n++;
+      assert.ok(localWall(q.profile, p.profile) / N >= FINE.weak - 0.02, `${item.id} 1:${N} ${p.name} ${(localWall(q.profile, p.profile) / N).toFixed(3)}mm`);
+      near(Math.max(...q.profile.map((v) => v[0])), Math.max(...p.profile.map((v) => v[0])), 1e-9, `${item.id} ${p.name} 바깥 반지름`);
+    }
+  }
+  assert.ok(n >= 16, `얇은 회전체 ${n}개`);
+});
+
+test('회전체 벽: LAMPAN 1:12 갓은 출력용 모델이면 시뮬레이션에서 사라지지 않는다', async () => {
+  const EX = await import('../src/core/export.js');
+  const model = buildModel(getItem('lampan'), { N: 12 });
+  assert.ok(simulate(EX.modelTriangles(model), FDM_FAST).lostPct > 5, '원래 모델은 갓이 사라짐');
+  const res = simulate(EX.modelTriangles(printModel(model, FDM_FAST).model), FDM_FAST);
+  assert.equal(res.lostPct, 0);
+});
+
+// ---------------------------------------------------------------- 출력 점검 보고(할 일 B4)
+test('출력 점검 보고: BILLY 는 키트, KLIPPAN 은 조립형·키트 둘 다를 권하고, 수치는 CLI sweep 과 같다', async () => {
+  const { printReport } = await import('../src/core/printprep.js');
+  const { analyse } = await import('../tools/print-sim.mjs');
+  const rep = (id) => printReport(printModel(buildModel(getItem(id), { N: 12 }), FINE).model, FINE);
+  assert.deepEqual(rep('billy').recommend, ['kit']);
+  assert.deepEqual(rep('klippan').recommend, ['assembled', 'kit']);
+  for (const id of ['billy', 'klippan']) {
+    const r = rep(id), a = analyse(getItem(id), 12);
+    assert.equal(a.printPlates, r.plates); assert.equal(a.printFit, r.fitsBed); assert.equal(a.printGrams, r.grams); assert.equal(a.recommend, r.recommend.join('+'));
+  }
+});
+
+test('출력 점검 보고: 프린터를 바꾸면 판 수·판에 들어가는지가 바뀐다', async () => {
+  const { printReport } = await import('../src/core/printprep.js');
+  const model = buildModel(getItem('billy'), { N: 12 });
+  const at = (id) => { const prof = printProfile(id, 'fine'); return printReport(printModel(model, prof).model, prof); };
+  assert.equal(at('fdm-256').plates, 1);
+  assert.ok(at('fdm-180').plates > 1);
+  const big = buildModel(getItem('billy'), { N: 6 });   // 높이 337mm
+  assert.equal(printReport(printModel(big, FINE).model, FINE).fitsBed, false);
 });
